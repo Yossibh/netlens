@@ -1,0 +1,344 @@
+import type { AnalyzeModules, Finding, NormalizedInput } from '@/types';
+
+type Rule = (ctx: { input: NormalizedInput; modules: AnalyzeModules }) => Finding[];
+
+function f(
+  id: string,
+  severity: Finding['severity'],
+  title: string,
+  explanation: string,
+  evidence: string[] = [],
+  nextSteps: string[] = [],
+  suggestedCommands: string[] = [],
+  module?: string
+): Finding {
+  return { id, severity, title, explanation, evidence, nextSteps, suggestedCommands, module };
+}
+
+// DNS rules --------------------------------------------------------------------
+const dnsRules: Rule[] = [
+  ({ modules, input }) => {
+    const d = modules.dns;
+    if (!d?.ok || !input.domain) return [];
+    if (d.records.A.length === 0 && d.records.AAAA.length === 0 && d.records.CNAME.length === 0) {
+      return [
+        f(
+          'dns.no-address-records',
+          'high',
+          'Domain does not resolve to any address',
+          'No A, AAAA, or CNAME records were returned. The domain cannot be reached over HTTP(S).',
+          ['A: []', 'AAAA: []', 'CNAME: []'],
+          ['Verify the domain is registered and nameservers are delegated correctly.', 'Check the registrar for nameserver configuration.'],
+          [`dig NS ${input.domain} +short`, `whois ${input.domain}`],
+          'dns'
+        ),
+      ];
+    }
+    return [];
+  },
+  ({ modules, input }) => {
+    const d = modules.dns;
+    if (!d?.ok || !input.domain) return [];
+    if (!d.hasIPv6 && d.records.A.length > 0) {
+      return [
+        f(
+          'dns.missing-ipv6',
+          'info',
+          'No IPv6 (AAAA) records',
+          'The domain is IPv4-only. Adding AAAA records improves reachability for IPv6-only clients and networks that prefer IPv6.',
+          ['AAAA: []'],
+          ['Publish AAAA records for the primary hostname.'],
+          [`dig AAAA ${input.domain} +short`],
+          'dns'
+        ),
+      ];
+    }
+    return [];
+  },
+  ({ modules, input }) => {
+    const d = modules.dns;
+    if (!d?.ok || !input.domain) return [];
+    if (!d.hasCAA) {
+      return [
+        f(
+          'dns.missing-caa',
+          'low',
+          'No CAA records',
+          'CAA records restrict which CAs may issue certificates for this domain. Without CAA, any CA may issue a certificate.',
+          ['CAA: []'],
+          ['Publish CAA records pinning your issuer(s).'],
+          [`dig CAA ${input.domain} +short`],
+          'dns'
+        ),
+      ];
+    }
+    return [];
+  },
+  ({ modules, input }) => {
+    const d = modules.dns;
+    if (!d?.ok || !input.domain) return [];
+    if (d.dnssec === false) {
+      return [
+        f(
+          'dns.dnssec-unverified',
+          'info',
+          'DNSSEC not validated',
+          'The DoH resolver did not flag this response as DNSSEC-authenticated (AD=0).',
+          [`AD bit: ${d.dnssec}`],
+          ['If you operate this zone, consider signing it and publishing DS records at the parent.'],
+          [`dig DNSKEY ${input.domain} +dnssec`],
+          'dns'
+        ),
+      ];
+    }
+    return [];
+  },
+];
+
+// Email rules ------------------------------------------------------------------
+const emailRules: Rule[] = [
+  ({ modules, input }) => {
+    const e = modules.email;
+    if (!e?.ok || !input.domain) return [];
+    const out: Finding[] = [];
+    if (e.mxPresent && !e.spf?.present) {
+      out.push(
+        f(
+          'email.no-spf',
+          'medium',
+          'Missing SPF record',
+          'Domain has MX records but no SPF policy. Receiving mail servers cannot verify the sender IP; spoofing is easier.',
+          ['No TXT record beginning with v=spf1'],
+          ['Publish an SPF TXT record such as "v=spf1 include:_spf.example.com -all".'],
+          [`dig TXT ${input.domain} +short`],
+          'email'
+        )
+      );
+    }
+    if (!e.dmarc?.present) {
+      out.push(
+        f(
+          'email.no-dmarc',
+          'medium',
+          'Missing DMARC record',
+          'No DMARC policy is published. Receivers cannot enforce or report on SPF/DKIM alignment. Spoofing risk is elevated.',
+          [`Queried: _dmarc.${input.domain}`],
+          ['Publish a DMARC record starting with "v=DMARC1; p=none;" for monitoring, then tighten to quarantine/reject.'],
+          [`dig TXT _dmarc.${input.domain} +short`],
+          'email'
+        )
+      );
+    } else if (e.dmarc.policy === 'none') {
+      out.push(
+        f(
+          'email.dmarc-p-none',
+          'low',
+          'DMARC policy is p=none',
+          'DMARC is published but set to monitor-only. Receivers will not reject or quarantine unaligned mail.',
+          [e.dmarc.raw ?? ''],
+          ['Once reports confirm legitimate senders are aligned, move to p=quarantine and then p=reject.'],
+          [`dig TXT _dmarc.${input.domain} +short`],
+          'email'
+        )
+      );
+    }
+    if (e.spf?.present && e.spf.qualifier && ['+', '?'].includes(e.spf.qualifier)) {
+      out.push(
+        f(
+          'email.spf-weak-qualifier',
+          'low',
+          `SPF uses permissive "${e.spf.qualifier}all" terminal`,
+          'A permissive SPF terminal mechanism weakens anti-spoofing. Prefer "-all" (hard fail) or at least "~all" (soft fail).',
+          [e.spf.raw ?? ''],
+          ['Tighten the SPF record to end with "-all" after verifying all legitimate senders are included.'],
+          [],
+          'email'
+        )
+      );
+    }
+    return out;
+  },
+];
+
+// HTTP rules -------------------------------------------------------------------
+const httpRules: Rule[] = [
+  ({ modules }) => {
+    const h = modules.http;
+    if (!h?.ok) return [];
+    if (!h.securityHeaders.hsts) {
+      return [
+        f(
+          'http.no-hsts',
+          'low',
+          'No HSTS header',
+          'Strict-Transport-Security was not set. Browsers will not enforce HTTPS on subsequent visits; downgrade attacks become easier.',
+          [`final URL: ${h.finalUrl}`],
+          ['Add "Strict-Transport-Security: max-age=31536000; includeSubDomains" on HTTPS responses.'],
+          [],
+          'http'
+        ),
+      ];
+    }
+    return [];
+  },
+  ({ modules }) => {
+    const h = modules.http;
+    if (!h?.ok) return [];
+    const out: Finding[] = [];
+    if (h.corsHeaders.accessControlAllowOrigin === '*' &&
+        (h.corsHeaders.accessControlAllowCredentials?.toLowerCase() === 'true')) {
+      out.push(
+        f(
+          'http.cors-wildcard-with-credentials',
+          'high',
+          'CORS wildcard with credentials',
+          'Access-Control-Allow-Origin: * combined with Access-Control-Allow-Credentials: true is invalid per spec and can indicate a misconfigured origin.',
+          [`ACAO: *`, `ACAC: true`],
+          ['Replace "*" with an explicit allowlist of origins when credentials are allowed.'],
+          [],
+          'http'
+        )
+      );
+    } else if (h.corsHeaders.accessControlAllowOrigin === '*') {
+      out.push(
+        f(
+          'http.cors-wildcard',
+          'info',
+          'CORS wildcard origin',
+          'Access-Control-Allow-Origin is "*". This is fine for public APIs but exposes any authenticated endpoint to cross-origin access.',
+          [`ACAO: *`],
+          ['Confirm no authenticated or privileged response paths reuse this header.'],
+          [],
+          'http'
+        )
+      );
+    }
+    return out;
+  },
+  ({ modules }) => {
+    const h = modules.http;
+    if (!h?.ok) return [];
+    if (h.redirects.length >= 4) {
+      return [
+        f(
+          'http.long-redirect-chain',
+          'low',
+          `Redirect chain of ${h.redirects.length} hops`,
+          'Long redirect chains increase latency and can mask misconfiguration (HTTP↔HTTPS, www↔apex ping-pong, etc.).',
+          h.redirects.map((r) => `${r.status} ${r.from} -> ${r.to}`),
+          ['Collapse intermediate hops to a single final destination.'],
+          [],
+          'http'
+        ),
+      ];
+    }
+    return [];
+  },
+  ({ modules }) => {
+    const h = modules.http;
+    if (h && !h.ok && h.error?.includes('Redirect loop')) {
+      return [
+        f(
+          'http.redirect-loop',
+          'high',
+          'Redirect loop detected',
+          h.error,
+          h.redirects.map((r) => `${r.status} ${r.from} -> ${r.to}`),
+          ['Inspect the server configuration causing the cycle (often HTTP/HTTPS or canonical host rules).'],
+          [],
+          'http'
+        ),
+      ];
+    }
+    return [];
+  },
+];
+
+// TLS rules --------------------------------------------------------------------
+const tlsRules: Rule[] = [
+  ({ modules, input }) => {
+    const t = modules.tls;
+    if (!t?.ok || !t.latestCertificate || !input.domain) return [];
+    const d = t.latestCertificate.daysUntilExpiry;
+    if (d < 0) {
+      return [
+        f(
+          'tls.certificate-expired',
+          'high',
+          `Latest certificate in CT logs is expired (${Math.abs(d)} days ago)`,
+          'The most recent certificate issued for this domain (from crt.sh) is past its notAfter date. Note this reflects CT issuance, not a live handshake.',
+          [`notAfter: ${t.latestCertificate.notAfter}`],
+          ['Renew the certificate and verify the live chain with openssl s_client.'],
+          [`openssl s_client -connect ${input.domain}:443 -servername ${input.domain} </dev/null | openssl x509 -noout -dates`],
+          'tls'
+        ),
+      ];
+    }
+    if (d <= 14) {
+      return [
+        f(
+          'tls.certificate-expiring-soon',
+          'medium',
+          `Latest certificate expires in ${d} days`,
+          'The most recent CT log entry shows an imminent expiry. Confirm automation is renewing it.',
+          [`notAfter: ${t.latestCertificate.notAfter}`],
+          ['Verify ACME / renewal automation is running.', 'Check the live cert to confirm it matches what CT shows.'],
+          [`openssl s_client -connect ${input.domain}:443 -servername ${input.domain} </dev/null | openssl x509 -noout -dates`],
+          'tls'
+        ),
+      ];
+    }
+    return [];
+  },
+];
+
+// Inference rules --------------------------------------------------------------
+const inferenceRules: Rule[] = [
+  ({ modules }) => {
+    const i = modules.inference;
+    if (!i?.ok || !i.originExposureRisk || i.originExposureRisk.risk === 'none' || i.originExposureRisk.risk === 'low') return [];
+    return [
+      f(
+        'inference.origin-possibly-exposed',
+        i.originExposureRisk.risk === 'high' ? 'high' : 'medium',
+        'CDN in use but origin may be directly reachable',
+        i.originExposureRisk.reason,
+        i.cdn?.evidence ?? [],
+        ['Verify origin firewall accepts connections only from the CDN\'s IP ranges.', 'Rotate the origin hostname / IP if it has leaked.'],
+        [],
+        'inference'
+      ),
+    ];
+  },
+];
+
+const ALL_RULES: Rule[] = [...dnsRules, ...emailRules, ...httpRules, ...tlsRules, ...inferenceRules];
+
+export function runFindings(ctx: { input: NormalizedInput; modules: AnalyzeModules }): Finding[] {
+  const findings: Finding[] = [];
+  for (const rule of ALL_RULES) {
+    try {
+      findings.push(...rule(ctx));
+    } catch (e) {
+      findings.push(
+        f(
+          'engine.rule-error',
+          'info',
+          'A findings rule failed to evaluate',
+          e instanceof Error ? e.message : String(e),
+          [],
+          [],
+          [],
+          'engine'
+        )
+      );
+    }
+  }
+  return findings;
+}
+
+export function riskLevel(findings: Finding[]): 'low' | 'medium' | 'high' {
+  if (findings.some((f) => f.severity === 'high')) return 'high';
+  if (findings.some((f) => f.severity === 'medium')) return 'medium';
+  return 'low';
+}

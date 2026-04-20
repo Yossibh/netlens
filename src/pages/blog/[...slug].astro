@@ -1,0 +1,33 @@
+---
+import Layout from '../../components/Layout.astro';
+import { getCollection, type CollectionEntry } from 'astro:content';
+import { readingTimeMinutes, formatDate } from '../../lib/blog';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog');
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: { post },
+  }));
+}
+
+type Props = { post: CollectionEntry<'blog'> };
+const { post } = Astro.props as Props;
+const { Content } = await post.render();
+---
+<Layout title={`${post.data.title} - netlens`} description={post.data.description}>
+  <article class="post">
+    <h1>{post.data.title}</h1>
+    <div class="meta">
+      {formatDate(post.data.pubDate)} · {post.data.author} · {readingTimeMinutes(post)} min read
+      {post.data.tags.length > 0 && (
+        <span class="tag-row">
+          {post.data.tags.map((t) => <a class="tag" href={`/blog/tags/${t}/`}>{t}</a>)}
+        </span>
+      )}
+    </div>
+    <Content />
+    <p class="post-footer mono"><a href="/blog">- back to all posts</a></p>
+  </article>
+</Layout>
+

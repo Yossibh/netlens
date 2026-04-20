@@ -1,0 +1,50 @@
+---
+import Layout from '../../components/Layout.astro';
+import { getSortedPosts, readingTimeMinutes, formatDate } from '../../lib/blog';
+
+const posts = await getSortedPosts();
+const [featured, ...rest] = posts;
+---
+<Layout title="netlens - blog" description="Essays on SRE, security, applied AI, and network diagnostics by Yossi Ben Hagai.">
+  <h1>Writing</h1>
+  <p class="tagline">Essays on SRE, security, applied AI, and network diagnostics.</p>
+
+  {featured && (
+    <a class="featured-card" href={`/blog/${featured.slug}/`}>
+      <div class="featured-label mono">latest</div>
+      <h2>{featured.data.title}</h2>
+      <p class="featured-desc">{featured.data.description}</p>
+      <div class="featured-meta mono">
+        {formatDate(featured.data.pubDate)} · {featured.data.author} · {readingTimeMinutes(featured)} min read
+        {featured.data.tags.length > 0 && (
+          <span class="tag-row">
+            {featured.data.tags.map((t) => <span class="tag">{t}</span>)}
+          </span>
+        )}
+      </div>
+    </a>
+  )}
+
+  {rest.length > 0 && (
+    <>
+      <h3 class="section-label">More posts</h3>
+      <ul class="post-list">
+        {rest.map((p) => (
+          <li>
+            <a href={`/blog/${p.slug}/`}>{p.data.title}</a>
+            <div class="meta">
+              {formatDate(p.data.pubDate)} · {p.data.author} · {readingTimeMinutes(p)} min
+              {p.data.tags.length > 0 && (
+                <span class="tag-row">
+                  {p.data.tags.map((t) => <a class="tag" href={`/blog/tags/${t}/`}>{t}</a>)}
+                </span>
+              )}
+            </div>
+            <div>{p.data.description}</div>
+          </li>
+        ))}
+      </ul>
+    </>
+  )}
+</Layout>
+

@@ -1,0 +1,62 @@
+---
+import Layout from '../components/Layout.astro';
+---
+<Layout title="netlens - compare" description="Compare two domains or URLs across DNS, HTTP, CDN, and email posture.">
+  <section class="hero">
+    <div class="prompt mono">$ netlens compare</div>
+    <h1>Compare two environments.</h1>
+    <p class="tagline">Useful when staging and prod behave differently, or when you suspect one replica is out of sync.</p>
+    <form id="compare-form">
+      <div class="input-row">
+        <input id="a" type="text" placeholder="input A (e.g. staging.example.com)" required />
+      </div>
+      <div class="input-row">
+        <input id="b" type="text" placeholder="input B (e.g. www.example.com)" required />
+        <button class="primary" type="submit" id="go">Compare</button>
+      </div>
+    </form>
+  </section>
+  <section id="status" class="hidden"></section>
+  <section id="out" class="hidden"></section>
+
+  <script type="module" is:inline>
+    const f = document.getElementById('compare-form');
+    const go = document.getElementById('go');
+    const out = document.getElementById('out');
+    const st = document.getElementById('status');
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const a = document.getElementById('a').value.trim();
+      const b = document.getElementById('b').value.trim();
+      if (!a || !b) return;
+      go.disabled = true;
+      st.classList.remove('hidden');
+      st.innerHTML = '<div class="loading">analyzing both targets…</div>';
+      out.classList.add('hidden');
+      try {
+        const res = await fetch('/api/compare', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ a, b }) });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'HTTP ' + res.status);
+        st.classList.add('hidden');
+        out.classList.remove('hidden');
+        let html = `<div class="panel"><h2>Differences (${body.summary.totalDifferences})</h2>`;
+        if (!body.differences.length) html += '<div class="loading">No structural differences found in compared sections.</div>';
+        else {
+          html += '<table class="kv"><tr><td>section.key</td><td>A</td><td>B</td></tr>';
+          for (const d of body.differences) {
+            html += `<tr><td>${d.section}.${d.key}</td><td><code>${escapeHtml(JSON.stringify(d.a))}</code></td><td><code>${escapeHtml(JSON.stringify(d.b))}</code></td></tr>`;
+          }
+          html += '</table>';
+        }
+        html += '</div>';
+        html += `<div class="panel"><h2>Raw comparison JSON</h2><pre class="json">${escapeHtml(JSON.stringify(body, null, 2))}</pre></div>`;
+        out.innerHTML = html;
+      } catch (err) {
+        st.innerHTML = `<div class="error">${err.message || err}</div>`;
+      } finally {
+        go.disabled = false;
+      }
+    });
+    function escapeHtml(s) { return s.replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])); }
+  </script>
+</Layout>

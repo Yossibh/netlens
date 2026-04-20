@@ -1,0 +1,325 @@
+---
+import Layout from '../components/Layout.astro';
+---
+<Layout>
+  <section class="hero">
+    <div class="prompt mono" id="prompt-line"><span class="p-host">yossi@netlens</span>:<span class="p-path">~</span>$ <span id="typed-cmd"></span><span class="cursor" id="cursor">&#9608;</span></div>
+
+    <h1 class="headline" id="headline"><span class="h-reveal">See through the network.</span></h1>
+
+    <div class="taglines">
+      <p class="tagline">DNS. HTTP. TLS. Email posture. CDN and origin inference.</p>
+      <p class="tagline">Correlated into findings, not just dumps of raw records.</p>
+      <p class="tagline">Every check ships with the exact command to reproduce it.</p>
+    </div>
+
+    <div class="module-pills mono" aria-hidden="true">
+      <span class="pill">dns</span><span class="pill">http</span><span class="pill">tls</span><span class="pill">email</span><span class="pill">inference</span><span class="pill">findings</span>
+    </div>
+
+    <form id="analyze-form" class="input-row" autocomplete="off">
+      <input id="input" type="text" placeholder="example.com  ·  https://example.com/path  ·  1.1.1.1" required />
+      <button class="primary" type="submit" id="go">Analyze</button>
+    </form>
+    <div class="examples">
+      try:
+      <button type="button" data-ex="cloudflare.com">cloudflare.com</button>
+      <button type="button" data-ex="github.com">github.com</button>
+      <button type="button" data-ex="https://www.google.com/search">https://www.google.com/search</button>
+      <button type="button" data-ex="1.1.1.1">1.1.1.1</button>
+    </div>
+  </section>
+
+  <section id="status" class="hidden"></section>
+  <section id="report" class="hidden"></section>
+
+  <script type="module" is:inline>
+    // Typed prompt intro. Respects prefers-reduced-motion and skips animation
+    // entirely when an ?input= deep-link is present (we want to show results fast).
+    (function () {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const deepLink = new URLSearchParams(location.search).has('input');
+      const target = document.getElementById('typed-cmd');
+      const cursor = document.getElementById('cursor');
+      const headline = document.getElementById('headline');
+      const taglines = document.querySelectorAll('.taglines .tagline');
+      const pills = document.querySelectorAll('.module-pills .pill');
+      const cmd = 'netlens analyze --input ';
+
+      if (!target) return;
+
+      if (reduce || deepLink) {
+        target.textContent = cmd;
+        headline?.classList.add('shown');
+        taglines.forEach((el) => el.classList.add('shown'));
+        pills.forEach((el) => el.classList.add('shown'));
+        return;
+      }
+
+      headline?.classList.remove('shown');
+      let i = 0;
+      function step() {
+        if (i <= cmd.length) {
+          target.textContent = cmd.slice(0, i);
+          i++;
+          setTimeout(step, 40 + Math.random() * 40);
+        } else {
+          cursor?.classList.add('blink');
+          headline?.classList.add('shown');
+          taglines.forEach((el, idx) => setTimeout(() => el.classList.add('shown'), 120 + idx * 180));
+          pills.forEach((el, idx) => setTimeout(() => el.classList.add('shown'), 300 + idx * 70));
+        }
+      }
+      setTimeout(step, 200);
+    })();
+  </script>
+
+  <script type="module" is:inline>
+    const form = document.getElementById('analyze-form');
+    const input = document.getElementById('input');
+    const go = document.getElementById('go');
+    const statusEl = document.getElementById('status');
+    const reportEl = document.getElementById('report');
+
+    document.querySelectorAll('[data-ex]').forEach((b) =>
+      b.addEventListener('click', () => {
+        input.value = b.dataset.ex;
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+      })
+    );
+
+    // Allow sharing / deep links: ?input=...
+    const params = new URLSearchParams(location.search);
+    if (params.get('input')) {
+      input.value = params.get('input');
+      setTimeout(() => form.dispatchEvent(new Event('submit', { cancelable: true })), 50);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const value = input.value.trim();
+      if (!value) return;
+
+      const newUrl = new URL(location.href);
+      newUrl.searchParams.set('input', value);
+      history.replaceState(null, '', newUrl.toString());
+
+      go.disabled = true;
+      statusEl.classList.remove('hidden');
+      statusEl.innerHTML = '<div class="loading">analyzing… running DNS, HTTP, TLS, email, and inference modules in parallel.</div>';
+      reportEl.classList.add('hidden');
+      reportEl.innerHTML = '';
+
+      try {
+        const res = await fetch(`/api/analyze?input=${encodeURIComponent(value)}`, { headers: { accept: 'application/json' } });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        renderReport(body);
+      } catch (err) {
+        statusEl.innerHTML = `<div class="error">${(err && err.message) || err}</div>`;
+      } finally {
+        go.disabled = false;
+      }
+    });
+
+    function h(tag, attrs = {}, ...children) {
+      const el = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') el.className = v;
+        else if (k === 'html') el.innerHTML = v;
+        else el.setAttribute(k, v);
+      }
+      for (const c of children.flat()) {
+        if (c == null) continue;
+        el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+      }
+      return el;
+    }
+
+    function kv(rows) {
+      const tbl = h('table', { class: 'kv' });
+      for (const [k, v] of rows) {
+        tbl.appendChild(h('tr', {}, h('td', {}, k), h('td', {}, typeof v === 'string' ? v : JSON.stringify(v))));
+      }
+      return tbl;
+    }
+
+    function badge(sev) {
+      return h('span', { class: `badge ${sev}` }, sev);
+    }
+
+    function renderReport(report) {
+      statusEl.classList.add('hidden');
+      reportEl.classList.remove('hidden');
+      reportEl.innerHTML = '';
+
+      // Summary
+      const summary = h('div', { class: 'panel' },
+        h('h2', {}, report.summary.title),
+        h('div', {}, badge(report.summary.riskLevel), ` risk · ${report.findings.length} findings · ${report.meta.durationMs}ms`),
+        h('ul', { class: 'mono' }, ...report.summary.highlights.map((hl) => h('li', {}, hl)))
+      );
+      reportEl.appendChild(summary);
+
+      // Tabs
+      const tabs = ['Findings', 'DNS', 'HTTP', 'Email', 'TLS', 'Inference', 'Commands', 'Raw JSON'];
+      const tabBar = h('div', { class: 'tabs' });
+      const panels = {};
+      tabs.forEach((t, i) => {
+        const btn = h('button', { class: i === 0 ? 'active' : '' }, t);
+        btn.addEventListener('click', () => {
+          tabBar.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          Object.values(panels).forEach((p) => p.classList.add('hidden'));
+          panels[t].classList.remove('hidden');
+        });
+        tabBar.appendChild(btn);
+      });
+      reportEl.appendChild(tabBar);
+
+      // Findings panel
+      const findingsPanel = h('div', { class: 'panel' });
+      if (!report.findings.length) {
+        findingsPanel.appendChild(h('div', { class: 'loading' }, 'No findings emitted. Everything the engine knows how to check looks normal.'));
+      }
+      for (const f of report.findings) {
+        const item = h('div', { class: 'finding' },
+          h('div', { class: 'title' }, badge(f.severity), f.title),
+          h('div', { class: 'explanation' }, f.explanation),
+          f.evidence.length ? h('div', {}, h('strong', {}, 'Evidence'), h('ul', {}, ...f.evidence.map((x) => h('li', {}, h('code', {}, x))))) : null,
+          f.nextSteps.length ? h('div', {}, h('strong', {}, 'Next steps'), h('ul', {}, ...f.nextSteps.map((x) => h('li', {}, x)))) : null,
+          f.suggestedCommands.length ? h('div', {}, h('strong', {}, 'Commands'), ...f.suggestedCommands.map((c) => h('pre', { class: 'cmd' }, c))) : null,
+        );
+        findingsPanel.appendChild(item);
+      }
+      panels['Findings'] = findingsPanel;
+      reportEl.appendChild(findingsPanel);
+
+      // DNS
+      const dns = report.modules.dns;
+      const dnsPanel = h('div', { class: 'panel hidden' });
+      if (!dns || !dns.ok) {
+        dnsPanel.appendChild(h('div', { class: 'loading' }, dns?.skipReason || dns?.error || 'No DNS data.'));
+      } else {
+        for (const [type, recs] of Object.entries(dns.records)) {
+          if (!recs.length) continue;
+          dnsPanel.appendChild(h('h3', {}, type));
+          dnsPanel.appendChild(h('pre', { class: 'cmd' }, recs.map((r) => `${r.name}\t${r.ttl ?? ''}\t${r.data}`).join('\n')));
+        }
+        dnsPanel.appendChild(h('h3', {}, 'Meta'));
+        dnsPanel.appendChild(kv([['IPv6', String(dns.hasIPv6)], ['CAA', String(dns.hasCAA)], ['DNSSEC (AD)', String(dns.dnssec ?? 'unknown')]]));
+      }
+      panels['DNS'] = dnsPanel;
+      reportEl.appendChild(dnsPanel);
+
+      // HTTP
+      const http = report.modules.http;
+      const httpPanel = h('div', { class: 'panel hidden' });
+      if (!http || !http.ok) {
+        httpPanel.appendChild(h('div', { class: 'loading' }, http?.skipReason || http?.error || 'No HTTP data.'));
+      } else {
+        httpPanel.appendChild(kv([
+          ['Final URL', http.finalUrl],
+          ['Status', http.status],
+          ['Server', http.server || '-'],
+          ['Timing (ms)', http.timingMs],
+        ]));
+        if (http.redirects.length) {
+          httpPanel.appendChild(h('h3', {}, 'Redirect chain'));
+          httpPanel.appendChild(h('pre', { class: 'cmd' }, http.redirects.map((r) => `${r.status}  ${r.from}\n  -> ${r.to}`).join('\n')));
+        }
+        httpPanel.appendChild(h('h3', {}, 'Security headers'));
+        httpPanel.appendChild(kv(Object.entries(http.securityHeaders).map(([k, v]) => [k, v || '(missing)'])));
+        httpPanel.appendChild(h('h3', {}, 'Cache headers'));
+        httpPanel.appendChild(kv(Object.entries(http.cacheHeaders).map(([k, v]) => [k, v || '(missing)'])));
+        httpPanel.appendChild(h('h3', {}, 'All response headers'));
+        httpPanel.appendChild(h('pre', { class: 'json' }, JSON.stringify(http.headers, null, 2)));
+      }
+      panels['HTTP'] = httpPanel;
+      reportEl.appendChild(httpPanel);
+
+      // Email
+      const em = report.modules.email;
+      const emPanel = h('div', { class: 'panel hidden' });
+      if (!em || em.skipped) {
+        emPanel.appendChild(h('div', { class: 'loading' }, em?.skipReason || 'Email posture requires a domain.'));
+      } else {
+        emPanel.appendChild(kv([
+          ['MX present', String(em.mxPresent)],
+          ['SPF', em.spf?.present ? (em.spf.raw || 'yes') : 'missing'],
+          ['SPF qualifier', em.spf?.qualifier || '-'],
+          ['DMARC', em.dmarc?.present ? (em.dmarc.raw || 'yes') : 'missing'],
+          ['DMARC policy', em.dmarc?.policy || '-'],
+          ['MTA-STS TXT', em.mtaSts?.present ? (em.mtaSts.raw || 'yes') : 'missing'],
+          ['BIMI', em.bimi?.present ? (em.bimi.raw || 'yes') : 'missing'],
+        ]));
+        if (em.dkimSelectorProbe?.length) {
+          emPanel.appendChild(h('h3', {}, 'DKIM selector probe'));
+          emPanel.appendChild(kv(em.dkimSelectorProbe.map((p) => [p.selector, p.present ? '✓ ' + (p.raw?.slice(0, 80) || '') : '✗'])));
+        }
+      }
+      panels['Email'] = emPanel;
+      reportEl.appendChild(emPanel);
+
+      // TLS
+      const tls = report.modules.tls;
+      const tlsPanel = h('div', { class: 'panel hidden' });
+      if (!tls || tls.skipped || tls.source === 'unavailable') {
+        tlsPanel.appendChild(h('div', { class: 'loading' }, tls?.skipReason || 'TLS inspection unavailable.'));
+      } else if (tls.latestCertificate) {
+        tlsPanel.appendChild(h('div', { class: 'loading' }, 'Source: Certificate Transparency logs (crt.sh). Not a live peer handshake.'));
+        tlsPanel.appendChild(kv([
+          ['Issuer', tls.latestCertificate.issuer],
+          ['Common Name', tls.latestCertificate.commonName || '-'],
+          ['Not Before', tls.latestCertificate.notBefore],
+          ['Not After', tls.latestCertificate.notAfter],
+          ['Days until expiry', tls.latestCertificate.daysUntilExpiry],
+          ['Recent CT entries', tls.recentCount],
+        ]));
+        tlsPanel.appendChild(h('h3', {}, 'SANs'));
+        tlsPanel.appendChild(h('pre', { class: 'cmd' }, tls.latestCertificate.sans.join('\n')));
+      } else {
+        tlsPanel.appendChild(h('div', { class: 'loading' }, 'No certificates found in CT logs for this domain.'));
+      }
+      panels['TLS'] = tlsPanel;
+      reportEl.appendChild(tlsPanel);
+
+      // Inference
+      const inf = report.modules.inference;
+      const infPanel = h('div', { class: 'panel hidden' });
+      if (!inf) {
+        infPanel.appendChild(h('div', { class: 'loading' }, 'No inference data.'));
+      } else {
+        infPanel.appendChild(kv([
+          ['CDN detected', inf.cdn?.detected ? inf.cdn.name || 'yes' : 'no'],
+          ['ASN', inf.asn?.asn ? `AS${inf.asn.asn} ${inf.asn.owner || ''}`.trim() : '-'],
+          ['ASN country', inf.asn?.cc || '-'],
+          ['Proxy hints', inf.proxyHints.join(', ') || '-'],
+          ['Origin exposure risk', inf.originExposureRisk ? `${inf.originExposureRisk.risk}: ${inf.originExposureRisk.reason}` : '-'],
+        ]));
+        if (inf.cdn?.evidence?.length) {
+          infPanel.appendChild(h('h3', {}, 'Evidence'));
+          infPanel.appendChild(h('pre', { class: 'cmd' }, inf.cdn.evidence.join('\n')));
+        }
+      }
+      panels['Inference'] = infPanel;
+      reportEl.appendChild(infPanel);
+
+      // Commands
+      const cmdPanel = h('div', { class: 'panel hidden' });
+      cmdPanel.appendChild(h('div', { class: 'loading' }, 'Reproducible commands - copy into your terminal to verify each check.'));
+      for (const c of report.generatedCommands) {
+        cmdPanel.appendChild(h('pre', { class: 'cmd' }, c));
+      }
+      panels['Commands'] = cmdPanel;
+      reportEl.appendChild(cmdPanel);
+
+      // Raw
+      const rawPanel = h('div', { class: 'panel hidden' });
+      rawPanel.appendChild(h('div', { class: 'loading' }, 'Full machine-readable report - identical to what POST /api/analyze returns.'));
+      rawPanel.appendChild(h('pre', { class: 'json' }, JSON.stringify(report, null, 2)));
+      panels['Raw JSON'] = rawPanel;
+      reportEl.appendChild(rawPanel);
+    }
+  </script>
+</Layout>

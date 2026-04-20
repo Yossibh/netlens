@@ -1,0 +1,33 @@
+---
+import Layout from '../components/Layout.astro';
+---
+<Layout title="netlens - about">
+  <article class="post">
+    <h1>About netlens</h1>
+    <p class="meta">built by Yossi Ben Hagai · SRE · software engineer · security &amp; network · applied AI</p>
+    <p>
+      netlens is an analysis and workflow tool for engineers who investigate real systems.
+      It is not another commodity DNS lookup site. Every module contributes to a correlated report:
+      raw data, interpreted findings, likely root causes, reproducible commands, and machine-readable JSON.
+    </p>
+    <h2>Why it exists</h2>
+    <p>
+      Most lookup tools dump information. They leave the hardest part - interpretation - to you. When
+      something is wrong in production, you don't need 9 browser tabs of DNS records, header dumps,
+      and cert timelines. You need <em>"the CDN is in front of this domain but the A record is your
+      origin ASN, so the origin is probably directly reachable"</em> in one sentence.
+    </p>
+    <h2>Design principles</h2>
+    <ul>
+      <li><strong>Correlation over concatenation.</strong> Findings combine signals across modules.</li>
+      <li><strong>Reproducibility.</strong> Every check has a copy-paste command.</li>
+      <li><strong>API-first.</strong> <code>GET /api/analyze?input=…</code> returns the same report the UI renders.</li>
+      <li><strong>MCP-ready.</strong> Every module is a registered tool (<code>/api/tools</code>). Wiring an MCP server is a thin adapter layer.</li>
+      <li><strong>Honest about limitations.</strong> See <code>docs/limitations.md</code> in the repository.</li>
+    </ul>
+    <h2>Contact</h2>
+    <p>
+      LinkedIn: <a href="https://www.linkedin.com/in/yossibenhagai/" target="_blank" rel="noopener">linkedin.com/in/yossibenhagai</a>
+    </p>
+  </article>
+</Layout>

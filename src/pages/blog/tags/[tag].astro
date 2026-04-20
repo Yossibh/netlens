@@ -1,0 +1,32 @@
+---
+import Layout from '../../../components/Layout.astro';
+import { getAllTags, readingTimeMinutes, formatDate } from '../../../lib/blog';
+
+export async function getStaticPaths() {
+  const tags = await getAllTags();
+  return [...tags.entries()].map(([tag, posts]) => ({
+    params: { tag },
+    props: { tag, posts },
+  }));
+}
+
+const { tag, posts } = Astro.props as { tag: string; posts: Awaited<ReturnType<typeof getAllTags>> extends Map<string, infer V> ? V : never };
+---
+<Layout title={`netlens - blog - #${tag}`} description={`Posts tagged ${tag}`}>
+  <h1>#{tag}</h1>
+  <p class="tagline">{posts.length} post{posts.length === 1 ? '' : 's'} tagged <code>{tag}</code>. <a href="/blog">all posts</a></p>
+  <ul class="post-list">
+    {posts.map((p) => (
+      <li>
+        <a href={`/blog/${p.slug}/`}>{p.data.title}</a>
+        <div class="meta">
+          {formatDate(p.data.pubDate)} · {p.data.author} · {readingTimeMinutes(p)} min
+          <span class="tag-row">
+            {p.data.tags.map((t) => <a class={`tag ${t === tag ? 'active' : ''}`} href={`/blog/tags/${t}/`}>{t}</a>)}
+          </span>
+        </div>
+        <div>{p.data.description}</div>
+      </li>
+    ))}
+  </ul>
+</Layout>

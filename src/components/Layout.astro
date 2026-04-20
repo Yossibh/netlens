@@ -1,0 +1,41 @@
+---
+import '../styles/global.css';
+interface Props {
+  title?: string;
+  description?: string;
+}
+const { title = 'netlens - see through the network', description = 'Correlated network diagnostics for engineers. DNS, HTTP, TLS, email posture, and CDN inference - with findings, not just data.' } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='28'%3E%F0%9F%94%8D%3C/text%3E%3C/svg%3E" />
+    <link rel="alternate" type="application/rss+xml" title="netlens writing" href="/rss.xml" />
+  </head>
+  <body>
+    <header class="site">
+      <a class="brand" href="/">netlens<span class="dot">.</span></a>
+      <nav>
+        <a href="/">Analyze</a>
+        <a href="/compare">Compare</a>
+        <a href="/blog">Blog</a>
+        <a href="/about">About</a>
+        <a href="/api/tools">API</a>
+      </nav>
+    </header>
+    <main class="container">
+      <slot />
+    </main>
+    <footer class="site">
+      netlens · built by <a href="https://www.linkedin.com/in/yossibenhagai/" target="_blank" rel="noopener">Yossi Ben Hagai</a> · <a href="/about">about</a> · <a href="/api/health">health</a>
+    </footer>
+  </body>
+</html>

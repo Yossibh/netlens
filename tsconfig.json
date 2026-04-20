@@ -1,0 +1,18 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@lib/*": ["src/lib/*"],
+      "@types/*": ["src/types/*"]
+    },
+    "types": ["@cloudflare/workers-types", "astro/client"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "moduleResolution": "bundler",
+    "allowJs": false
+  },
+  "include": ["src/**/*", "functions/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist", ".astro"]
+}
