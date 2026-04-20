@@ -1,15 +1,33 @@
 import type { TlsModuleResult } from '@/types';
 
-// LIMITATION: Cloudflare Workers outbound fetch() does not expose the peer
-// certificate. We cannot perform a live TLS handshake inspection from the edge.
-// For MVP we use crt.sh Certificate Transparency logs as a best-effort source
-// for recent issuance and expiry of the *latest* leaf cert for the domain.
+// TLS inspection strategy:
 //
-// TODO: Swap in a live probe when an origin-side probe worker or a provider
-// like ssl-labs / tls.com is wired up. Keep this function signature stable.
+// Cloudflare Workers cannot perform a raw TLS handshake against the origin and
+// thus cannot read the peer certificate directly. To produce useful TLS output
+// we combine two independent sources:
 //
-// crt.sh JSON endpoint: https://crt.sh/?q=<domain>&output=json
-// It returns one entry per CT log entry (potentially many duplicates).
+// 1. Certificate issuance / expiry (primary: Certspotter, fallback: crt.sh)
+//    Certspotter is more reliable than crt.sh and has a clean JSON API with a
+//    generous unauthenticated rate limit. API docs: https://sslmate.com/ct_search_api/
+//    TODO: add an optional SSLMATE_API_KEY env binding to raise the rate limit.
+//
+// 2. Live TLS metadata from the HTTP probe response (passed in via opts).
+//    When we fetch the target URL, Cloudflare exposes response.cf.tlsVersion
+//    and response.cf.tlsCipher. Those are the session version/cipher used on
+//    the subrequest. This is live, origin-specific truth (no third party).
+//
+// If both sources fail we surface a clear, actionable reason rather than a
+// cryptic error string.
+
+interface CertspotterIssuance {
+  id: string;
+  tbs_sha256: string;
+  dns_names: string[];
+  pubkey_sha256: string;
+  issuer?: { name?: string; pubkey_sha256?: string };
+  not_before: string;
+  not_after: string;
+}
 
 interface CrtShEntry {
   issuer_name: string;
@@ -17,42 +35,61 @@ interface CrtShEntry {
   name_value: string;
   not_before: string;
   not_after: string;
-  entry_timestamp?: string;
-  id?: number;
 }
 
-export async function inspectTls(domain: string): Promise<TlsModuleResult> {
-  const url = `https://crt.sh/?q=${encodeURIComponent(domain)}&output=json&exclude=expired`;
+async function fetchWithTimeout(url: string, ms: number, init?: RequestInit): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 20_000);
-    let res: Response;
-    try {
-      res = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json' } });
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!res.ok) {
-      return { ok: true, source: 'unavailable', skipped: true, skipReason: `crt.sh returned HTTP ${res.status}` };
-    }
-    const text = await res.text();
-    if (!text.trim()) {
-      return { ok: true, source: 'crt.sh', recentCount: 0 };
-    }
-    let entries: CrtShEntry[];
-    try {
-      entries = JSON.parse(text);
-    } catch {
-      return { ok: true, source: 'unavailable', skipped: true, skipReason: 'crt.sh returned non-JSON (often a transient rate limit or HTML error page)' };
-    }
-    if (!entries.length) return { ok: true, source: 'crt.sh', recentCount: 0 };
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
+async function queryCertspotter(domain: string): Promise<TlsModuleResult | null> {
+  const url = `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(domain)}&expand=dns_names&expand=issuer`;
+  try {
+    const res = await fetchWithTimeout(url, 10_000, { headers: { accept: 'application/json' } });
+    if (res.status === 429) return { ok: true, source: 'unavailable', skipped: true, skipReason: 'Certspotter rate limit hit. Try again later or set SSLMATE_API_KEY.' };
+    if (!res.ok) return null;
+    const entries = (await res.json()) as CertspotterIssuance[];
+    if (!entries.length) return { ok: true, source: 'certspotter', recentCount: 0 };
     entries.sort((a, b) => new Date(b.not_before).getTime() - new Date(a.not_before).getTime());
     const latest = entries[0]!;
-    const notAfter = new Date(latest.not_after);
-    const daysUntilExpiry = Math.floor((notAfter.getTime() - Date.now()) / 86_400_000);
-    const sans = Array.from(new Set((latest.name_value || '').split('\n').map((s) => s.trim()).filter(Boolean)));
+    const daysUntilExpiry = Math.floor((new Date(latest.not_after).getTime() - Date.now()) / 86_400_000);
+    return {
+      ok: true,
+      source: 'certspotter',
+      recentCount: entries.length,
+      latestCertificate: {
+        issuer: latest.issuer?.name ?? 'unknown',
+        notBefore: latest.not_before,
+        notAfter: latest.not_after,
+        daysUntilExpiry,
+        commonName: latest.dns_names[0],
+        sans: Array.from(new Set(latest.dns_names)),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
 
+async function queryCrtSh(domain: string): Promise<TlsModuleResult | null> {
+  const url = `https://crt.sh/?q=${encodeURIComponent(domain)}&output=json&exclude=expired`;
+  try {
+    const res = await fetchWithTimeout(url, 15_000, { headers: { accept: 'application/json' } });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text.trim()) return { ok: true, source: 'crt.sh', recentCount: 0 };
+    let entries: CrtShEntry[];
+    try { entries = JSON.parse(text); } catch { return null; }
+    if (!entries.length) return { ok: true, source: 'crt.sh', recentCount: 0 };
+    entries.sort((a, b) => new Date(b.not_before).getTime() - new Date(a.not_before).getTime());
+    const latest = entries[0]!;
+    const daysUntilExpiry = Math.floor((new Date(latest.not_after).getTime() - Date.now()) / 86_400_000);
+    const sans = Array.from(new Set((latest.name_value || '').split('\n').map((s) => s.trim()).filter(Boolean)));
     return {
       ok: true,
       source: 'crt.sh',
@@ -66,16 +103,26 @@ export async function inspectTls(domain: string): Promise<TlsModuleResult> {
         sans,
       },
     };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    const friendly = /abort/i.test(msg)
-      ? 'crt.sh Certificate Transparency lookup timed out (popular domains can have thousands of CT entries)'
-      : msg;
-    return {
-      ok: true,
-      source: 'unavailable',
-      skipped: true,
-      skipReason: friendly,
-    };
+  } catch {
+    return null;
   }
+}
+
+export interface InspectTlsOpts {
+  /** live TLS metadata from the HTTP probe's response.cf (Workers-only) */
+  live?: { version?: string; cipher?: string };
+}
+
+export async function inspectTls(domain: string, opts: InspectTlsOpts = {}): Promise<TlsModuleResult> {
+  const [certspotter, crtsh] = await Promise.all([queryCertspotter(domain), queryCrtSh(domain)]);
+  const result = certspotter ?? crtsh ?? {
+    ok: true as const,
+    source: 'unavailable' as const,
+    skipped: true as const,
+    skipReason: 'Both Certspotter and crt.sh were unreachable. Certificate inspection is best-effort on the Cloudflare MVP; see /docs/limitations.md.',
+  };
+  if (opts.live && (opts.live.version || opts.live.cipher)) {
+    result.liveTls = { version: opts.live.version, cipher: opts.live.cipher };
+  }
+  return result;
 }

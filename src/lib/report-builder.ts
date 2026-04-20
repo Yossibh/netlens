@@ -31,8 +31,9 @@ export async function buildReport(rawInput: string): Promise<AnalyzeReport> {
     }));
   }
 
-  // Run the remaining modules in parallel.
-  const [http, email, tls] = await Promise.all([
+  // HTTP + Email run in parallel; TLS waits on HTTP so it can pick up
+  // live TLS version/cipher from the probe response.cf.
+  const [http, email] = await Promise.all([
     probeUrl
       ? inspectHttp(probeUrl)
       : Promise.resolve({
@@ -53,15 +54,15 @@ export async function buildReport(rawInput: string): Promise<AnalyzeReport> {
           skipReason: 'Email posture requires a domain',
           mxPresent: false,
         } satisfies AnalyzeModules['email']),
-    domain
-      ? inspectTls(domain)
-      : Promise.resolve({
-          ok: true,
-          source: 'unavailable',
-          skipped: true,
-          skipReason: 'TLS inspection requires a domain',
-        } satisfies AnalyzeModules['tls']),
   ]);
+  const tls = domain
+    ? await inspectTls(domain, { live: http.liveTls })
+    : ({
+        ok: true,
+        source: 'unavailable',
+        skipped: true,
+        skipReason: 'TLS inspection requires a domain',
+      } satisfies AnalyzeModules['tls']);
   modules.http = http;
   modules.email = email;
   modules.tls = tls;
@@ -125,6 +126,8 @@ function buildHighlights(input: NormalizedInput, modules: AnalyzeModules, findin
   }
   if (modules.tls?.latestCertificate) {
     out.push(`TLS (CT): expires in ${modules.tls.latestCertificate.daysUntilExpiry}d`);
+  } else if (modules.tls?.liveTls?.version) {
+    out.push(`TLS: ${modules.tls.liveTls.version}${modules.tls.liveTls.cipher ? ' ' + modules.tls.liveTls.cipher : ''}`);
   }
   out.push(`${findingsCount} finding${findingsCount === 1 ? '' : 's'}`);
   return out;

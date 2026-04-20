@@ -115,6 +115,13 @@ export async function inspectHttp(startUrl: string): Promise<HttpModuleResult> {
       }
 
       const h = headersToObject(res.headers);
+      // Cloudflare Workers exposes session TLS info on response.cf for subrequests.
+      // Shape: { tlsVersion: 'TLSv1.3', tlsCipher: 'AEAD-AES128-GCM-SHA256', ... }
+      // This is the only reliable source of live TLS version/cipher from Workers.
+      const cf = (res as unknown as { cf?: { tlsVersion?: string; tlsCipher?: string } }).cf;
+      const liveTls = cf && (cf.tlsVersion || cf.tlsCipher)
+        ? { version: cf.tlsVersion, cipher: cf.tlsCipher }
+        : undefined;
       return {
         ok: true,
         finalUrl: current,
@@ -126,6 +133,7 @@ export async function inspectHttp(startUrl: string): Promise<HttpModuleResult> {
         cacheHeaders: pickCache(h),
         server: h['server'],
         timingMs: Date.now() - startedAt,
+        liveTls,
       };
     }
 

@@ -50,7 +50,15 @@ describe('buildReport (integration, fetch mocked)', () => {
         return dnsJson([]);
       }
 
-      // crt.sh
+      // Certspotter (primary TLS source)
+      if (url.startsWith('https://api.certspotter.com/')) {
+        const future = new Date(Date.now() + 90 * 86_400_000).toISOString();
+        return new Response(JSON.stringify([
+          { id: '1', tbs_sha256: 'x', pubkey_sha256: 'y', dns_names: ['example.test', 'www.example.test'], issuer: { name: "C=US, O=Let's Encrypt, CN=R3" }, not_before: '2026-01-01T00:00:00Z', not_after: future },
+        ]), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+
+      // crt.sh (fallback)
       if (url.startsWith('https://crt.sh/')) {
         const future = new Date(Date.now() + 90 * 86_400_000).toISOString();
         return new Response(JSON.stringify([

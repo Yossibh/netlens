@@ -89,6 +89,8 @@ export interface HttpModuleResult {
   };
   server?: string;
   timingMs?: number;
+  /** Live TLS session metadata from the Cloudflare fetch subrequest (when available). */
+  liveTls?: { version?: string; cipher?: string };
 }
 
 export interface EmailModuleResult {
@@ -109,7 +111,7 @@ export interface TlsModuleResult {
   error?: string;
   skipped?: boolean;
   skipReason?: string;
-  source: 'crt.sh' | 'unavailable' | 'peer';
+  source: 'crt.sh' | 'certspotter' | 'unavailable' | 'peer';
   latestCertificate?: {
     issuer: string;
     notBefore: string;
@@ -119,6 +121,7 @@ export interface TlsModuleResult {
     sans: string[];
   };
   recentCount?: number;
+  liveTls?: { version?: string; cipher?: string };
 }
 
 export interface InferenceModuleResult {
