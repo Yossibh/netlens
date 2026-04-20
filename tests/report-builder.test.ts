@@ -39,6 +39,13 @@ describe('buildReport (integration, fetch mocked)', () => {
         if (name === '_dmarc.example.test' && type === 'TXT') {
           return dnsJson([{ name: '_dmarc.example.test.', type: 16, TTL: 300, data: '"v=DMARC1; p=reject;"' }]);
         }
+        // Team Cymru ASN lookup for 93.184.216.34 -> AS13335 (Cloudflare)
+        if (name === '34.216.184.93.origin.asn.cymru.com' && type === 'TXT') {
+          return dnsJson([{ name, type: 16, TTL: 300, data: '"13335 | 93.184.216.0/24 | US | arin | 2011-08-11"' }]);
+        }
+        if (name === 'AS13335.asn.cymru.com' && type === 'TXT') {
+          return dnsJson([{ name, type: 16, TTL: 300, data: '"13335 | US | arin | 2010-07-14 | CLOUDFLARENET, US"' }]);
+        }
         // Default: empty answer
         return dnsJson([]);
       }

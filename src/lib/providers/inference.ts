@@ -7,12 +7,14 @@ interface CdnSignature {
   asnIds?: number[];
 }
 
-// ASN ids for common CDNs (not exhaustive - extend over time).
+// NOTE: Cloudflare's `server: cloudflare` and `cf-ray` headers are stripped
+// upstream in http.ts when they originate from our own Workers runtime. The
+// remaining matcher would only fire if the origin genuinely re-exposes them.
+// In practice, Cloudflare is most reliably detected via ASN (AS13335).
 const CDN_SIGNATURES: CdnSignature[] = [
   {
     name: 'Cloudflare',
     headerMatchers: [
-      { header: 'server', pattern: /cloudflare/i },
       { header: 'cf-ray', pattern: /./ },
     ],
     asnIds: [13335],
@@ -31,8 +33,9 @@ const CDN_SIGNATURES: CdnSignature[] = [
     headerMatchers: [
       { header: 'server', pattern: /AkamaiGHost|AkamaiNetStorage/i },
       { header: 'x-akamai-transformed', pattern: /./ },
+      { header: 'x-akamai-request-id', pattern: /./ },
     ],
-    asnIds: [20940, 16625, 21342],
+    asnIds: [20940, 16625, 21342, 12222, 16702, 17204, 18717, 23454, 23455, 32787, 33905, 35204],
   },
   {
     name: 'AWS CloudFront',
@@ -41,6 +44,23 @@ const CDN_SIGNATURES: CdnSignature[] = [
       { header: 'x-amz-cf-id', pattern: /./ },
     ],
     asnIds: [16509, 14618],
+  },
+  {
+    name: 'Azure Front Door',
+    headerMatchers: [
+      { header: 'x-azure-ref', pattern: /./ },
+      { header: 'x-cache', pattern: /azure/i },
+      { header: 'x-msedge-ref', pattern: /./ },
+    ],
+    asnIds: [8075],
+  },
+  {
+    name: 'Google Cloud CDN',
+    headerMatchers: [
+      { header: 'via', pattern: /google/i },
+      { header: 'server', pattern: /^gws$|^GSE$/i },
+    ],
+    asnIds: [15169, 396982],
   },
   {
     name: 'Vercel',

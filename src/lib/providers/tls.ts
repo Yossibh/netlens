@@ -25,7 +25,7 @@ export async function inspectTls(domain: string): Promise<TlsModuleResult> {
   const url = `https://crt.sh/?q=${encodeURIComponent(domain)}&output=json&exclude=expired`;
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const timer = setTimeout(() => ctrl.abort(), 20_000);
     let res: Response;
     try {
       res = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json' } });
@@ -33,7 +33,7 @@ export async function inspectTls(domain: string): Promise<TlsModuleResult> {
       clearTimeout(timer);
     }
     if (!res.ok) {
-      return { ok: true, source: 'unavailable', skipped: true, skipReason: `crt.sh HTTP ${res.status}` };
+      return { ok: true, source: 'unavailable', skipped: true, skipReason: `crt.sh returned HTTP ${res.status}` };
     }
     const text = await res.text();
     if (!text.trim()) {
@@ -43,7 +43,7 @@ export async function inspectTls(domain: string): Promise<TlsModuleResult> {
     try {
       entries = JSON.parse(text);
     } catch {
-      return { ok: true, source: 'unavailable', skipped: true, skipReason: 'crt.sh returned non-JSON' };
+      return { ok: true, source: 'unavailable', skipped: true, skipReason: 'crt.sh returned non-JSON (often a transient rate limit or HTML error page)' };
     }
     if (!entries.length) return { ok: true, source: 'crt.sh', recentCount: 0 };
 
@@ -67,11 +67,15 @@ export async function inspectTls(domain: string): Promise<TlsModuleResult> {
       },
     };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const friendly = /abort/i.test(msg)
+      ? 'crt.sh Certificate Transparency lookup timed out (popular domains can have thousands of CT entries)'
+      : msg;
     return {
       ok: true,
       source: 'unavailable',
       skipped: true,
-      skipReason: err instanceof Error ? err.message : String(err),
+      skipReason: friendly,
     };
   }
 }

@@ -3,9 +3,29 @@ import type { HttpModuleResult, HttpRedirect } from '@/types';
 const MAX_REDIRECTS = 8;
 const FETCH_TIMEOUT_MS = 8000;
 
+// Cloudflare Workers' outbound fetch() injects its own headers on the response
+// (the subrequest round-trips through CF's edge). These are NOT origin headers.
+// We strip them so CDN inference, findings, and raw JSON reflect the real origin.
+// 'server: cloudflare' is also injected in some paths; we drop it only when
+// cf-ray is present (signal that the response passed through our own runtime).
+const CF_INJECTED_HEADERS = new Set([
+  'cf-ray',
+  'cf-cache-status',
+  'cf-request-id',
+  'cf-connecting-ip',
+  'cf-visitor',
+  'cf-ipcountry',
+  'cf-ew-via',
+]);
+
 function headersToObject(h: Headers): Record<string, string> {
   const out: Record<string, string> = {};
   h.forEach((v, k) => { out[k.toLowerCase()] = v; });
+  const cfRayPresent = 'cf-ray' in out;
+  for (const k of CF_INJECTED_HEADERS) delete out[k];
+  if (cfRayPresent && out['server']?.toLowerCase() === 'cloudflare') {
+    delete out['server'];
+  }
   return out;
 }
 
