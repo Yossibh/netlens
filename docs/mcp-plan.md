@@ -1,6 +1,6 @@
 # MCP plan
 
-netlens is built with MCP (Model Context Protocol) as a first-class target - not an afterthought.
+netrecon is built with MCP (Model Context Protocol) as a first-class target - not an afterthought.
 
 ## Current state (Phase 1)
 
@@ -13,9 +13,9 @@ netlens is built with MCP (Model Context Protocol) as a first-class target - not
 
 ## Mapping to MCP (Phase 2)
 
-The MCP server will be a thin adapter with no duplicated logic. Each netlens tool becomes an MCP tool verbatim:
+The MCP server will be a thin adapter with no duplicated logic. Each netrecon tool becomes an MCP tool verbatim:
 
-| netlens tool           | MCP tool name         | Notes                                      |
+| netrecon tool           | MCP tool name         | Notes                                      |
 | ---                    | ---                   | ---                                        |
 | `analyze_input`        | `analyze_input`       | Auto-detect + normalize                    |
 | `resolve_dns`          | `resolve_dns`         | Full DoH record set                        |
@@ -35,7 +35,7 @@ Phase 2 adds a second deployable:
 mcp-server/
 ├── package.json
 ├── src/index.ts        # MCP transport bootstrap (stdio or streamable HTTP)
-└── src/bridge.ts       # imports TOOLS from ../netlens/src/lib/tools and maps them
+└── src/bridge.ts       # imports TOOLS from ../netrecon/src/lib/tools and maps them
 ```
 
 `bridge.ts` iterates `TOOLS`:

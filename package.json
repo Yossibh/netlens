@@ -1,5 +1,5 @@
 {
-  "name": "netlens",
+  "name": "netrecon",
   "version": "0.1.0",
   "description": "Correlated network diagnostics for engineers. See through the network.",
   "type": "module",

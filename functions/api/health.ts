@@ -2,7 +2,7 @@ export const onRequest: PagesFunction = async () =>
   new Response(
     JSON.stringify({
       ok: true,
-      service: 'netlens',
+      service: 'netrecon',
       version: '0.1.0',
       time: new Date().toISOString(),
     }),

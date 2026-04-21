@@ -67,4 +67,4 @@ If the ASN is not your CDN's ASN, the "edge protection" you are paying for is no
 
 Pick a cadence - quarterly minimum - and automate all four checks. Treat any drift as a security finding, not an ops ticket. The class of attacker who exploits these does not need zero-days; they need your cleanup to be late.
 
-netlens runs these checks and correlates the signals into findings in one pass. It is not a substitute for an actual posture program. It is the first ten minutes of one.
+netrecon runs these checks and correlates the signals into findings in one pass. It is not a substitute for an actual posture program. It is the first ten minutes of one.

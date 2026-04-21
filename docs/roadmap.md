@@ -15,8 +15,8 @@
 - Same code paths as the HTTP API.
 
 ## Phase 3 - CI / CD integrations
-- GitHub Action: run netlens on every PR to a `sites.txt` file; post a summary comment.
-- CLI (`npx netlens analyze <input>`) that hits the hosted `/api/analyze`.
+- GitHub Action: run netrecon on every PR to a `sites.txt` file; post a summary comment.
+- CLI (`npx netrecon analyze <input>`) that hits the hosted `/api/analyze`.
 - Webhook: subscribe to a domain; alert when DMARC weakens, cert expiry drops below threshold, or CDN fronting disappears.
 - Saved "diagnostic recipes": named bundles of checks for specific incident classes.
 

@@ -6,7 +6,7 @@ author: "Yossi Ben Hagai"
 tags: ["sre", "dns", "http", "debugging"]
 ---
 
-You get a message: *"our checkout page is 502-ing for some users."* Here is the order I work through the problem in, and how netlens compresses most of it into one request.
+You get a message: *"our checkout page is 502-ing for some users."* Here is the order I work through the problem in, and how netrecon compresses most of it into one request.
 
 ## 1. Normalize the input
 
@@ -61,6 +61,6 @@ openssl s_client -connect checkout.example.com:443 -servername checkout.example.
 
 SPF/DMARC rarely cause "site down" incidents. But if the incident is *"customers stopped receiving password resets"*, it's the first place to look.
 
-## What netlens does differently
+## What netrecon does differently
 
 All six steps above, in parallel, in under a second, with correlated findings instead of six tool outputs. That is the entire thesis.

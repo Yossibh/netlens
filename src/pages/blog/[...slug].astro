@@ -15,7 +15,7 @@ type Props = { post: CollectionEntry<'blog'> };
 const { post } = Astro.props as Props;
 const { Content } = await post.render();
 ---
-<Layout title={`${post.data.title} - netlens`} description={post.data.description}>
+<Layout title={`${post.data.title} - netrecon`} description={post.data.description}>
   <article class="post">
     <h1>{post.data.title}</h1>
     <div class="meta">

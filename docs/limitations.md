@@ -1,6 +1,6 @@
 # Limitations
 
-netlens is hosted on Cloudflare Workers / Pages Functions. That runtime is a superb fit for HTTPS-based diagnostics at the edge, but it intentionally does not expose several primitives that engineers might expect from a traditional netdiag box.
+netrecon is hosted on Cloudflare Workers / Pages Functions. That runtime is a superb fit for HTTPS-based diagnostics at the edge, but it intentionally does not expose several primitives that engineers might expect from a traditional netdiag box.
 
 ## Not available in the MVP
 
@@ -31,4 +31,4 @@ Classic `whois` uses TCP/43. Workers cannot reach it. RDAP (`https://rdap.org/do
 
 ## Why we disclose this
 
-Every diagnostic tool has limits. Most sites pretend they don't. If a tool silently returns "no certificate found" when it just can't see one, the engineer will waste minutes (or hours) chasing a ghost. netlens is built to tell the truth about what it does and doesn't know.
+Every diagnostic tool has limits. Most sites pretend they don't. If a tool silently returns "no certificate found" when it just can't see one, the engineer will waste minutes (or hours) chasing a ghost. netrecon is built to tell the truth about what it does and doesn't know.

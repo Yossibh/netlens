@@ -45,8 +45,8 @@ Not every question needs your most expensive model. Classify the input; route tr
 
 Never let the model both act *and* summarize in the same turn. Do the work with a tool-calling model. Summarize with a separate call whose prompt explicitly lists the failure modes to watch for ("if any check failed, say so plainly in the first sentence").
 
-## Where netlens fits
+## Where netrecon fits
 
-The reason every netlens diagnostic module is a registered tool with a typed input schema is exactly this: when the MCP server ships, an agent can call `analyze`, `compare_targets`, or `check_email_security` directly. Each tool is read-only, each has an explicit contract, each returns machine-readable findings. The agent gets to reason over the *findings*, not over scraped HTML.
+The reason every netrecon diagnostic module is a registered tool with a typed input schema is exactly this: when the MCP server ships, an agent can call `analyze`, `compare_targets`, or `check_email_security` directly. Each tool is read-only, each has an explicit contract, each returns machine-readable findings. The agent gets to reason over the *findings*, not over scraped HTML.
 
 That is not a small choice. It is the difference between an agent that actually helps on call and one that generates plausible-sounding paragraphs while production burns.

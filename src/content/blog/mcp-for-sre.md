@@ -50,7 +50,7 @@ Either design your write tools to be idempotent, or wrap them in a server-side d
 
 The scope of a tool is not "the tool's permission"; it is the smallest unit the tool can affect. `deploy(environment)` where `environment in {staging, prod}` is poorly scoped - one flag flip causes a prod deploy. `deploy_staging()` and `deploy_prod()` as separate tools, each with their own auth, is a better split because the auth surface maps to the blast radius.
 
-Same principle for netlens: every diagnostic is scoped to a single target. There is no `scan_the_internet()`.
+Same principle for netrecon: every diagnostic is scoped to a single target. There is no `scan_the_internet()`.
 
 ## Observability
 
@@ -60,4 +60,4 @@ Every MCP call should produce a structured log line with the tool name, inputs, 
 
 The next year is going to be full of "we gave the agent access to our prod APIs" postmortems. The teams that avoid them are the ones treating MCP tools with the same discipline they already apply to cross-service RPCs: schemas, idempotency, scoping, auditing, rate limits.
 
-netlens's Phase 2 (an MCP server mirroring the tool registry) is written with exactly these constraints. Every tool is a pure, read-only function over public data. That is the only reason it can be exposed to agents at all.
+netrecon's Phase 2 (an MCP server mirroring the tool registry) is written with exactly these constraints. Every tool is a pure, read-only function over public data. That is the only reason it can be exposed to agents at all.

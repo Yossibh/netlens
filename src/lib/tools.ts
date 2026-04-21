@@ -11,7 +11,7 @@ import { buildReport, buildComparison } from './report-builder';
 // module exposes one. In Phase 2 this registry is mounted as an MCP server
 // (see docs/mcp-plan.md) by iterating TOOLS and wiring each to tools/call.
 //
-// This is the single source of truth for "what netlens can do" - UI, HTTP API,
+// This is the single source of truth for "what netrecon can do" - UI, HTTP API,
 // and MCP will all go through this registry.
 
 export interface Tool<I, O> {
@@ -85,7 +85,7 @@ export const inferInfra = tool({
 
 export const analyze = tool({
   name: 'analyze',
-  description: 'Run the full netlens analysis pipeline for an input and return a correlated report.',
+  description: 'Run the full netrecon analysis pipeline for an input and return a correlated report.',
   inputSchema: z.object({ input: z.string().min(1) }),
   run: async ({ input }) => buildReport(input),
 });

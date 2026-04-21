@@ -1,7 +1,7 @@
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  site: 'https://netlens.pages.dev',
+  site: 'https://netrecon.pages.dev',
   output: 'static',
   build: {
     assets: 'assets',

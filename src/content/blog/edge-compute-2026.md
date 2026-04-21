@@ -31,7 +31,7 @@ What this means in practice: from an edge function you can trivially answer "wha
 
 ### Outbound connection detail
 
-Edge `fetch()` does the TLS handshake for you and returns a response object. You do not see the peer certificate chain, the negotiated cipher, or the OCSP staple. For a site that is itself behind the edge, this is fine. For a site that is doing **diagnostics** against third parties, it is a hard limit. netlens hits this limit; we document it in `limitations.md` and use Certificate Transparency logs as a proxy.
+Edge `fetch()` does the TLS handshake for you and returns a response object. You do not see the peer certificate chain, the negotiated cipher, or the OCSP staple. For a site that is itself behind the edge, this is fine. For a site that is doing **diagnostics** against third parties, it is a hard limit. netrecon hits this limit; we document it in `limitations.md` and use Certificate Transparency logs as a proxy.
 
 ### Origin network path
 
@@ -54,4 +54,4 @@ The honest heuristic:
 
 "The edge" is a network architecture choice, not a generic compute tier. Deploy code there because the problem is latency-sensitive, region-aware, or benefits from massive fan-out - not because a blog post said edge is the future. The runtime restrictions are real and they will bite you if you assumed it is "just Node, closer".
 
-netlens runs on Cloudflare Workers for a specific reason: DNS-over-HTTPS, crt.sh, and target HTTP fetches are all HTTPS calls, which is exactly where the Workers model shines. If any of those needed a raw TCP socket, the deployment target would be different.
+netrecon runs on Cloudflare Workers for a specific reason: DNS-over-HTTPS, crt.sh, and target HTTP fetches are all HTTPS calls, which is exactly where the Workers model shines. If any of those needed a raw TCP socket, the deployment target would be different.

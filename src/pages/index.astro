@@ -3,7 +3,7 @@ import Layout from '../components/Layout.astro';
 ---
 <Layout>
   <section class="hero">
-    <div class="prompt mono" id="prompt-line"><span class="p-host">yossi@netlens</span>:<span class="p-path">~</span>$ <span id="typed-cmd"></span><span class="cursor" id="cursor">&#9608;</span></div>
+    <div class="prompt mono" id="prompt-line"><span class="p-host">yossi@netrecon</span>:<span class="p-path">~</span>$ <span id="typed-cmd"></span><span class="cursor" id="cursor">&#9608;</span></div>
 
     <h1 class="headline" id="headline"><span class="h-reveal">See through the network.</span></h1>
 
@@ -44,7 +44,7 @@ import Layout from '../components/Layout.astro';
       const headline = document.getElementById('headline');
       const taglines = document.querySelectorAll('.taglines .tagline');
       const pills = document.querySelectorAll('.module-pills .pill');
-      const cmd = 'netlens analyze --input ';
+      const cmd = 'netrecon analyze --input ';
 
       if (!target) return;
 

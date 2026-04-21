@@ -5,9 +5,9 @@ import { getSortedPosts } from '../lib/blog';
 export async function GET(context: APIContext) {
   const posts = await getSortedPosts();
   return rss({
-    title: 'netlens - writing',
+    title: 'netrecon - writing',
     description: 'Essays on SRE, security, applied AI, and network diagnostics by Yossi Ben Hagai.',
-    site: context.site ?? 'https://netlens.pages.dev',
+    site: context.site ?? 'https://netrecon.pages.dev',
     items: posts.map((p) => ({
       title: p.data.title,
       description: p.data.description,

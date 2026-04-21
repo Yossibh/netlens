@@ -1,8 +1,8 @@
-# netlens
+# netrecon
 
 **Correlated network diagnostics for engineers. See through the network.**
 
-netlens takes a domain, IP, or URL and returns a *correlated* report: DNS, HTTP, TLS (via CT logs), email posture, and CDN/ASN inference - combined into findings with severity, evidence, next steps, and reproducible commands. Everything the UI shows is also available as JSON at `/api/analyze`.
+netrecon takes a domain, IP, or URL and returns a *correlated* report: DNS, HTTP, TLS (via CT logs), email posture, and CDN/ASN inference - combined into findings with severity, evidence, next steps, and reproducible commands. Everything the UI shows is also available as JSON at `/api/analyze`.
 
 Built by [Yossi Ben Hagai](https://www.linkedin.com/in/yossibenhagai/).
 

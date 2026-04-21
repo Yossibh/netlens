@@ -7,7 +7,7 @@ import { TOOLS } from '../../src/lib/tools';
 
 export const onRequest: PagesFunction = async () => {
   const manifest = {
-    service: 'netlens',
+    service: 'netrecon',
     version: '0.1.0',
     tools: TOOLS.map((t) => ({
       name: t.name,

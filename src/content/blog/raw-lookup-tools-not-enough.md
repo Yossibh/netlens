@@ -39,4 +39,4 @@ Situation 1 is almost certainly an exposed origin. Situation 2 is almost certain
 - **It returns JSON.** Because in six months you'll want an agent or a CI job to consume the same report.
 - **It is honest about limits.** TLS live peer inspection is not possible from a Workers edge - say so, don't fake it.
 
-netlens is an attempt to be that tool. It's deliberately not another commodity lookup site. If you want one of those, there are fifty. If you want correlated diagnostics you can pipe into your agent, start here.
+netrecon is an attempt to be that tool. It's deliberately not another commodity lookup site. If you want one of those, there are fifty. If you want correlated diagnostics you can pipe into your agent, start here.

@@ -12,7 +12,7 @@ export async function getStaticPaths() {
 
 const { tag, posts } = Astro.props as { tag: string; posts: Awaited<ReturnType<typeof getAllTags>> extends Map<string, infer V> ? V : never };
 ---
-<Layout title={`netlens - blog - #${tag}`} description={`Posts tagged ${tag}`}>
+<Layout title={`netrecon - blog - #${tag}`} description={`Posts tagged ${tag}`}>
   <h1>#{tag}</h1>
   <p class="tagline">{posts.length} post{posts.length === 1 ? '' : 's'} tagged <code>{tag}</code>. <a href="/blog">all posts</a></p>
   <ul class="post-list">

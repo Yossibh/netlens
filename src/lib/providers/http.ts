@@ -86,7 +86,7 @@ export async function inspectHttp(startUrl: string): Promise<HttpModuleResult> {
           method: 'GET',
           redirect: 'manual',
           signal: ctrl.signal,
-          headers: { 'user-agent': 'netlens/0.1 (+https://netlens.pages.dev)' },
+          headers: { 'user-agent': 'netrecon/0.1 (+https://netrecon.pages.dev)' },
         });
       } finally {
         clearTimeout(timer);
