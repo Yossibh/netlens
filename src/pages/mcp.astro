@@ -1,0 +1,166 @@
+---
+import Layout from '../components/Layout.astro';
+import { TOOLS } from '../lib/tools';
+
+const origin = Astro.site?.origin ?? 'https://netrecon.pages.dev';
+const mcpUrl = `${origin}/api/mcp`;
+
+const claudeDesktopSnippet = `{
+  "mcpServers": {
+    "netrecon": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "${mcpUrl}"]
+    }
+  }
+}`;
+
+const cursorSnippet = `{
+  "mcpServers": {
+    "netrecon": {
+      "url": "${mcpUrl}"
+    }
+  }
+}`;
+
+const vscodeSnippet = `{
+  "mcp": {
+    "servers": {
+      "netrecon": {
+        "type": "http",
+        "url": "${mcpUrl}"
+      }
+    }
+  }
+}`;
+
+const curlExample = `curl -s ${mcpUrl} \\
+  -H 'content-type: application/json' \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`;
+---
+
+<Layout
+  title="netrecon - MCP server"
+  description="netrecon exposes all 9 diagnostic tools over the Model Context Protocol. Plug it into Claude Desktop, Cursor, or any MCP-aware agent."
+>
+  <section class="mcp-hero">
+    <div class="prompt mono">$ netrecon --mcp</div>
+    <h1>Agent-ready network diagnostics.</h1>
+    <p class="tagline">
+      netrecon is a first-class MCP server. Connect Claude Desktop, Cursor, VS Code, or any MCP-aware client
+      and call the same diagnostics you'd run interactively - from inside your agent's reasoning loop.
+    </p>
+  </section>
+
+  <section class="mcp-endpoint">
+    <h2>Endpoint</h2>
+    <p>Single <strong>Streamable HTTP</strong> endpoint. No auth. No install. Stateless.</p>
+    <pre class="mono code-block"><code>{mcpUrl}</code></pre>
+    <p class="subtle">
+      Rate-limited to 20 requests/minute/IP. The underlying tools are SSRF-guarded
+      (<a href="/about">see security doc</a>).
+    </p>
+  </section>
+
+  <section class="mcp-clients">
+    <h2>Client setup</h2>
+
+    <details open>
+      <summary><strong>Claude Desktop</strong> <span class="subtle">(stdio bridge via <code>mcp-remote</code>)</span></summary>
+      <p>Add to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) or <code>%APPDATA%\Claude\claude_desktop_config.json</code> (Windows):</p>
+      <pre class="mono code-block"><code>{claudeDesktopSnippet}</code></pre>
+      <p class="subtle">Claude Desktop speaks stdio; <code>mcp-remote</code> bridges stdio &harr; HTTP. Restart Claude after editing.</p>
+    </details>
+
+    <details>
+      <summary><strong>Cursor</strong> <span class="subtle">(native Streamable HTTP)</span></summary>
+      <p>Add to <code>~/.cursor/mcp.json</code>:</p>
+      <pre class="mono code-block"><code>{cursorSnippet}</code></pre>
+    </details>
+
+    <details>
+      <summary><strong>VS Code / Continue / other HTTP-native clients</strong></summary>
+      <pre class="mono code-block"><code>{vscodeSnippet}</code></pre>
+    </details>
+
+    <details>
+      <summary><strong>Raw JSON-RPC</strong> <span class="subtle">(curl)</span></summary>
+      <pre class="mono code-block"><code>{curlExample}</code></pre>
+    </details>
+  </section>
+
+  <section class="mcp-tools">
+    <h2>Available tools</h2>
+    <p>These are the exact same tool definitions behind the UI and the JSON API. <code>tools/list</code> returns the same set.</p>
+    <table class="tools-table">
+      <thead>
+        <tr><th>Tool</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        {TOOLS.map((t) => (
+          <tr>
+            <td><code>{t.name}</code></td>
+            <td>{t.description}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="mcp-notes">
+    <h2>Notes for agent authors</h2>
+    <ul>
+      <li><strong>Start with <code>analyze</code></strong> for most investigations - it runs the full correlated pipeline and returns <code>summary.findings</code> + <code>summary.nextCommands</code> suitable for direct reasoning.</li>
+      <li>Tool results return both <code>structuredContent</code> (machine-readable) and a <code>content[0].text</code> compact-JSON fallback for clients that only read text.</li>
+      <li>The server is <strong>stateless</strong>: <code>initialize</code> establishes a protocol version but issues no session. You can batch requests freely.</li>
+      <li>Large outputs: a full <code>analyze</code> report can be 50-200KB. Point your agent at <code>summary</code> first, drill into sub-reports on demand.</li>
+      <li>Protocol versions supported: <code>2025-06-18</code> (preferred), <code>2025-03-26</code>, <code>2024-11-05</code>.</li>
+    </ul>
+  </section>
+</Layout>
+
+<style>
+  .mcp-hero { padding: 2rem 0 1rem; }
+  .mcp-hero h1 { font-size: 2.2rem; margin: 0.5rem 0 0.5rem; }
+  .mcp-hero .tagline { color: var(--fg-muted); max-width: 60ch; }
+  .mcp-endpoint, .mcp-clients, .mcp-tools, .mcp-notes { margin: 2rem 0; }
+  .mcp-endpoint h2, .mcp-clients h2, .mcp-tools h2, .mcp-notes h2 {
+    font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--fg-muted); margin-bottom: 0.8rem;
+  }
+  .code-block {
+    background: var(--bg-subtle, #0d1117);
+    border: 1px solid var(--border, #1f2933);
+    border-radius: 6px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .mcp-clients details {
+    border: 1px solid var(--border, #1f2933);
+    border-radius: 6px;
+    padding: 0.7rem 1rem;
+    margin-bottom: 0.7rem;
+    background: var(--bg-card, #0c1117);
+  }
+  .mcp-clients details[open] { padding-bottom: 1rem; }
+  .mcp-clients summary { cursor: pointer; padding: 0.2rem 0; }
+  .mcp-clients summary code { font-size: 0.85em; }
+  .mcp-clients p { margin: 0.6rem 0; }
+  .subtle { color: var(--fg-muted); font-size: 0.9em; }
+  .tools-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+  .tools-table th, .tools-table td {
+    border-bottom: 1px solid var(--border, #1f2933);
+    padding: 0.55rem 0.5rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .tools-table th { color: var(--fg-muted); font-weight: 500; }
+  .tools-table td:first-child { white-space: nowrap; }
+  .tools-table td code { color: var(--accent, #5cd2a3); }
+  .mcp-notes ul { padding-left: 1.2rem; line-height: 1.7; }
+</style>

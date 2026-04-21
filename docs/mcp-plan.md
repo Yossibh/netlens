@@ -1,65 +1,118 @@
 # MCP plan
 
-netrecon is built with MCP (Model Context Protocol) as a first-class target - not an afterthought.
-
-## Current state (Phase 1)
-
-- Every capability is a registered **Tool** in `src/lib/tools.ts` with:
-  - a stable name,
-  - a human-readable description,
-  - a Zod input schema,
-  - a pure `run(input)` implementation.
-- `GET /api/tools` returns a manifest of all tools, which is a proto-MCP `tools/list`.
-
-## Mapping to MCP (Phase 2)
-
-The MCP server will be a thin adapter with no duplicated logic. Each netrecon tool becomes an MCP tool verbatim:
-
-| netrecon tool           | MCP tool name         | Notes                                      |
-| ---                    | ---                   | ---                                        |
-| `analyze_input`        | `analyze_input`       | Auto-detect + normalize                    |
-| `resolve_dns`          | `resolve_dns`         | Full DoH record set                        |
-| `lookup_txt`           | `lookup_txt`          | Targeted TXT (e.g. `_dmarc.*`)             |
-| `inspect_http`         | `inspect_http`        | Redirect chain + categorized headers       |
-| `check_email_security` | `check_email_security`| SPF / DMARC / MTA-STS / BIMI / DKIM probe  |
-| `inspect_tls`          | `inspect_tls`         | CT log metadata (see limitations)          |
-| `infer_infrastructure` | `infer_infrastructure`| CDN + ASN correlation                      |
-| `analyze`              | `analyze`             | Full report                                |
-| `compare_targets`      | `compare_targets`     | Diff two targets                           |
-
-## Implementation sketch
-
-Phase 2 adds a second deployable:
+netrecon is built with MCP (Model Context Protocol) as a first-class target -
+not an afterthought. **Phase 2 (MCP server) is shipped** as of the `mcp-server`
+commit. The deployed endpoint is live at:
 
 ```
-mcp-server/
-├── package.json
-├── src/index.ts        # MCP transport bootstrap (stdio or streamable HTTP)
-└── src/bridge.ts       # imports TOOLS from ../netrecon/src/lib/tools and maps them
+https://netrecon.pages.dev/api/mcp
 ```
 
-`bridge.ts` iterates `TOOLS`:
+## What's live
 
-```ts
-server.setRequestHandler(ListToolsRequestSchema, () => ({
-  tools: TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: toJsonSchema(t.inputSchema) })),
-}));
-server.setRequestHandler(CallToolRequestSchema, async (req) => {
-  const t = getTool(req.params.name);
-  const parsed = t.inputSchema.parse(req.params.arguments);
-  const result = await t.run(parsed);
-  return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-});
+- `functions/api/mcp.ts` - Streamable HTTP transport (POST JSON-RPC 2.0)
+- `src/lib/mcp.ts` - pure, transport-agnostic handler
+- `src/lib/zod-to-json-schema.ts` - minimal Zod→JSON Schema converter
+- Same `TOOLS` registry drives the UI, `/api/analyze`, `/api/compare`, `/api/tools`
+  and MCP - zero duplicated business logic.
+- Rate-limited (20 req/min/IP) via the existing Pages Functions middleware.
+- Origin-validated (DNS rebinding defense per spec).
+- Stateless: no session IDs issued or tracked.
+
+## Supported methods
+
+| Method                    | Purpose                                                     |
+| ---                       | ---                                                         |
+| `initialize`              | Protocol version negotiation + capability advertisement     |
+| `notifications/initialized` | Client readiness (accepted silently, HTTP 202)            |
+| `ping`                    | Liveness                                                    |
+| `tools/list`              | Return all 9 netrecon tools with JSON Schema inputs         |
+| `tools/call`              | Dispatch to `Tool.run()` in `src/lib/tools.ts`              |
+
+Not implemented (and not planned for this server): `resources/*`, `prompts/*`,
+`sampling/*`, `logging/*`, `roots/*`, server-initiated notifications.
+
+## Protocol versions
+
+We respond to the requested version if it's one of `2025-06-18`, `2025-03-26`,
+or `2024-11-05`; otherwise we reply with `2025-06-18` and the client can
+decide. Unsupported version is **not** a hard error - the spec says the client
+can still try.
+
+## Error discipline
+
+| Situation                                   | Response                  |
+| ---                                         | ---                       |
+| Malformed JSON body                         | JSON-RPC `-32700`         |
+| JSON-RPC request missing `method`           | JSON-RPC `-32600`         |
+| Unknown method                              | JSON-RPC `-32601`         |
+| Unknown tool name in `tools/call`           | JSON-RPC `-32602`         |
+| Zod parse failure on tool arguments         | JSON-RPC `-32602` with `data.issues` |
+| Tool throws `SecurityError`                 | `result.isError = true`, text "Security validation failed: ..." |
+| Tool throws other `Error`                   | `result.isError = true`   |
+
+## Output shape
+
+Every `tools/call` success returns:
+
+```json
+{
+  "content": [
+    { "type": "text", "text": "<compact-JSON-of-the-result>" }
+  ],
+  "structuredContent": <the-result>,
+  "isError": false
+}
 ```
 
-Because `run` is plain async TypeScript, the MCP server can be **either**:
-- a Node process (for stdio transport - local agent use), or
-- a second Cloudflare Worker (for Streamable HTTP MCP - remote agent use).
+Text is **compact** JSON (no indentation) - `analyze` reports can exceed 100KB
+and pretty-printing would ~4x the payload. Agents that can read structured
+content should prefer `structuredContent`; agents that only read text get the
+same data in `content[0].text`.
 
-The same `TOOLS` array drives both.
+## Tool-boundary validation
 
-## Why this is not done in Phase 1
+Every `Tool.run()` self-validates its inputs via `src/lib/security.ts` before
+doing network I/O:
 
-- MCP clients are not the primary user of an unauthenticated public diagnostic tool yet.
-- A stable tool registry + public JSON API is the correct precursor. Phase 2 adds zero new business logic.
-- Keeping the MVP as just "Pages + Functions" maximizes the free-tier deployment simplicity for launch.
+| Tool                    | Validator             |
+| ---                     | ---                   |
+| `analyze_input`         | `validateInput`       |
+| `analyze`               | `validateInput`       |
+| `compare_targets`       | `validateInput` (both a+b) |
+| `resolve_dns`           | `validateHost`        |
+| `lookup_txt`            | `validateHost`        |
+| `inspect_http`          | `validateFetchUrl`    |
+| `check_email_security`  | `validateHost`        |
+| `inspect_tls`           | `validateHost`        |
+| `infer_infrastructure`  | `validateHost`        |
+
+This means an MCP client calling `resolve_dns {"domain":"169.254.169.254"}`
+gets `isError: true "Security validation failed: ..."` - same protection as
+the HTTP API layer provides for `/api/analyze`.
+
+## Why no SDK?
+
+`@modelcontextprotocol/sdk` is ~500KB, depends on Node streams, and has
+historically had Cloudflare Workers compatibility rough edges. The protocol
+itself is ~200 lines of JSON-RPC when you only need a stateless tool server,
+so hand-rolling it keeps the bundle small and removes a fragile dep.
+
+The handler (`src/lib/mcp.ts`) is transport-agnostic. If we ever add stdio
+for local agent use, the same module drives it through a 30-line Node
+wrapper.
+
+## Curl smoke test
+
+```bash
+# tools/list
+curl -s https://netrecon.pages.dev/api/mcp \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq
+
+# tools/call analyze github.com
+curl -s https://netrecon.pages.dev/api/mcp \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call",
+       "params":{"name":"analyze_input","arguments":{"input":"github.com"}}}' | jq
+```

@@ -24,6 +24,14 @@ export interface ValidateResult {
   reason?: string;
 }
 
+/** Thrown by tool-registry validators when an input is rejected. */
+export class SecurityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SecurityError';
+  }
+}
+
 // RFC1918 and friends - IPv4
 function isPrivateOrSpecialV4(ip: string): boolean {
   const parts = ip.split('.').map((n) => parseInt(n, 10));
