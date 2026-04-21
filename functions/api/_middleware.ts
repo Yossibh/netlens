@@ -25,6 +25,7 @@ interface Policy {
 function policyFor(path: string): Policy | null {
   if (path.startsWith('/api/analyze')) return { limit: 10, windowSec: 60 };
   if (path.startsWith('/api/compare')) return { limit: 10, windowSec: 60 };
+  if (path.startsWith('/api/peer-tls')) return { limit: 10, windowSec: 60 };
   if (path.startsWith('/api/mcp'))     return { limit: 20, windowSec: 60 };
   if (path.startsWith('/api/whoami'))  return { limit: 60, windowSec: 60 };
   return null;
