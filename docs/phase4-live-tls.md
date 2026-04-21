@@ -1,8 +1,12 @@
 # Phase 4 — Live peer TLS inspection (prototype)
 
 ## Status
-**Hybrid prototype shipped** at `/api/peer-tls`. Not yet wired into the main
-analyze report.
+**Integrated into `/api/analyze`** as `modules.livetls`. Runs in parallel with
+the existing HTTP/email probes. Default mode is `fast` (raw TCP only).
+`?live=full` opts into the Browser Rendering fallback for CF-fronted / TLS 1.3-
+only targets. A UI checkbox exposes this toggle.
+
+The standalone `/api/peer-tls` endpoint is still available for direct use.
 
 ## What it does
 Two code paths, chosen automatically:
@@ -33,16 +37,48 @@ Two code paths, chosen automatically:
 | Any other error | return the fast-path error, no fallback |
 
 ### Known browser-path limitations
-- `Network.getCertificate` sometimes returns an empty DER chain for cached or
-  CF-proxied origins. When that happens we degrade to the high-level fields
-  Chrome exposes via `securityDetails()`:
-  - `subject`, `sans`, `notBefore`, `notAfter`, `negotiatedVersion`,
-    `hostnameMatch`, `expired` — all populated.
-  - `fingerprintSha256`, `serialNumber`, `signatureAlgorithm`,
-    `publicKeyAlgorithm`, and sometimes `issuer` — left empty. The probe
-    explicitly notes this in the response `notes` field.
-- Browser path is gated by CF Browser Rendering quotas; a 429-style error from
-  the binding is surfaced as a clean error message, not a crash.
+Browser Rendering gives us a less direct view of the peer cert than raw TCP
+does. We mitigate by combining three CDP signals and patching empty fields
+from whichever source has them:
+
+1. **Primary DER source — `Security.visibleSecurityStateChanged` event**
+   Subscribed to *before* `page.goto`; we then wait up to 2s after
+   `domcontentloaded` for it to fire. Carries `certificateSecurityState.certificate`
+   (base64 DER chain) plus structured `subjectName`, `issuer`, `validFrom`,
+   `validTo`, `protocol`, `cipher`, `keyExchange`.
+2. **Secondary DER source — `Network.getCertificate({origin})`**
+   Tried against the final redirected origin first, then the originally
+   requested origin. Historically returns empty `tableNames` for CF-proxied
+   hosts, which is why we moved to the Security event as primary.
+3. **Tertiary signal — Puppeteer `response.securityDetails()`**
+   Used for `protocol` / `issuer` / `validFrom` when CDP Security didn't
+   surface them. Often empty for CF-edge responses.
+
+After extraction, we patch any empty leaf-cert fields (`issuer`, `subject`,
+`sans`) from whichever structured CDP source had a value. A manual ASN.1 walk
+also runs as a last-resort fallback in `rdnToDn` when pkijs returns
+`typesAndValues=[]` despite `valueBeforeDecode` still holding raw bytes.
+
+**What the browser path reliably returns on CF-fronted targets today:**
+`subject`, `sans`, `notBefore`, `notAfter`, `negotiatedVersion`,
+`hostnameMatch`, `expired`, `daysUntilExpiry`, `fingerprintSha256`,
+`serialNumber`, `signatureAlgorithm`, `publicKeyAlgorithm`.
+
+**Known remaining gap — issuer on Cloudflare-fronted targets:**
+For hosts like `cloudflare.com` / `www.cloudflare.com`, the DER returned via
+`Security.visibleSecurityStateChanged` has fingerprints that do *not* match
+the cert seen by standard clients (e.g. Python `ssl.getpeercert`). Chrome
+under the Browser Rendering binding appears to see a different cert whose
+issuer `RelativeDistinguishedNames.typesAndValues` decodes as an empty
+SEQUENCE. The high-level CDP `issuer` string is also empty in that path, so
+we have no authoritative source for the issuer and surface a clear note to
+users. Users needing authoritative issuer data should use the fast path
+(which works for all non-CF-fronted targets including github.com, google.com,
+badssl variants, etc).
+
+Browser path is also gated by CF Browser Rendering quotas (10 browser-minutes/day
+free plan); a 429-style error from the binding is surfaced as a clean error
+message, not a crash.
 
 ## Why bother
 Our existing TLS module uses Certificate Transparency logs. CT tells us what
@@ -124,8 +160,9 @@ Against `https://netrecon.pages.dev/api/peer-tls`:
 5. **Per-colo isolation of rate limits** — same quirk as the rest of the API.
 
 ## Next steps (if we go further)
-- Integrate into `/api/analyze` as `modules.livetls` — merge with CT-based
-  findings to flag "CT shows newer cert, peer serves older".
+- ✅ Integrate into `/api/analyze` as `modules.livetls` — done. CT-vs-peer
+  drift rules ship as findings (`ct-drift-peer-expired` high,
+  `ct-peer-notafter-differs` info).
 - Surface negotiated ALPN (parse `application_layer_protocol_negotiation` ext).
 - Capture SCT list from the Certificate Transparency extension and correlate
   with our CT-log lookups.
@@ -133,3 +170,8 @@ Against `https://netrecon.pages.dev/api/peer-tls`:
   issuer matches the next cert's subject (structural only; no sig check).
 - Try the TLS 1.3 path via a second socket that only offers 1.3 — capture
   ServerHello (version, cipher, group) even though Certificate is encrypted.
+- **Investigate issuer gap on Cloudflare-fronted targets** via Browser
+  Rendering. Candidate experiments: compare Security event DER vs a forced
+  `Network.getCertificate` on a non-redirected origin; check if the gap is
+  specific to CF's headless-Chrome TLS path or also affects other large
+  CF-fronted sites.
