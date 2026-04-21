@@ -1,4 +1,5 @@
 import { buildReport } from '../../src/lib/report-builder';
+import { validateInput } from '../../src/lib/security';
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
@@ -37,6 +38,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 async function runAndRespond(input: string, env: Env): Promise<Response> {
+  const v = validateInput(input);
+  if (!v.ok) return json({ error: v.reason }, 400);
   try {
     const report = await buildReport(input, { shodanApiKey: env.SHODAN_API_KEY });
     return json(report);

@@ -1,4 +1,5 @@
 import type { HttpModuleResult, HttpRedirect } from '@/types';
+import { validateFetchUrl } from '../security';
 
 const MAX_REDIRECTS = 8;
 const FETCH_TIMEOUT_MS = 8000;
@@ -77,6 +78,19 @@ export async function inspectHttp(startUrl: string): Promise<HttpModuleResult> {
         };
       }
       seen.add(current);
+
+      const guard = validateFetchUrl(current);
+      if (!guard.ok) {
+        return {
+          ok: false,
+          error: guard.reason || 'Blocked target.',
+          redirects,
+          headers: lastResponse ? headersToObject(lastResponse.headers) : {},
+          securityHeaders: {},
+          corsHeaders: {},
+          cacheHeaders: {},
+        };
+      }
 
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);

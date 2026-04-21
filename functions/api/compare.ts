@@ -1,4 +1,5 @@
 import { buildComparison } from '../../src/lib/report-builder';
+import { validateInput } from '../../src/lib/security';
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
@@ -26,6 +27,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
   if (!body.a || !body.b) return json({ error: 'Body must include "a" and "b"' }, 400);
+  const va = validateInput(body.a);
+  if (!va.ok) return json({ error: `a: ${va.reason}` }, 400);
+  const vb = validateInput(body.b);
+  if (!vb.ok) return json({ error: `b: ${vb.reason}` }, 400);
   try {
     const report = await buildComparison(body.a, body.b, { shodanApiKey: env.SHODAN_API_KEY });
     return json(report);
