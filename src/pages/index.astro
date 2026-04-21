@@ -208,7 +208,7 @@ import Layout from '../components/Layout.astro';
         { id: 'email',     label: 'email posture',       at: 900 },
         { id: 'tls',       label: 'TLS / CT logs',       at: 1200 },
         { id: 'inference', label: 'CDN / ASN inference', at: 1600 },
-        { id: 'shodan',    label: 'public-internet exposure', at: 1800 },
+        { id: 'exposure', label: 'public-internet exposure', at: 1800 },
         { id: 'findings',  label: 'correlate findings',  at: 2100 },
       ];
       const panel = document.createElement('div');
@@ -375,8 +375,8 @@ import Layout from '../components/Layout.astro';
 
       // Tabs (IP/Exposure tabs only when data present)
       const hasIp = !!report.modules.ip;
-      const hasShodan = !!report.modules.shodan;
-      const tabs = ['Findings', ...(hasIp ? ['IP'] : []), ...(hasShodan ? ['Exposure'] : []), 'DNS', 'HTTP', 'Email', 'TLS', 'Inference', 'Commands', 'Raw JSON'];
+      const hasExposure = !!report.modules.exposure;
+      const tabs = ['Findings', ...(hasIp ? ['IP'] : []), ...(hasExposure ? ['Exposure'] : []), 'DNS', 'HTTP', 'Email', 'TLS', 'Inference', 'Commands', 'Raw JSON'];
       const tabBar = h('div', { class: 'tabs' });
       const panels = {};
       tabs.forEach((t, i) => {
@@ -433,8 +433,8 @@ import Layout from '../components/Layout.astro';
       }
 
       // Exposure (third-party observed internet posture)
-      if (hasShodan) {
-        const s = report.modules.shodan;
+      if (hasExposure) {
+        const s = report.modules.exposure;
         const shPanel = h('div', { class: 'panel hidden' });
         if (s.skipped) {
           shPanel.appendChild(h('div', { class: 'loading' }, s.skipReason || 'Exposure data unavailable.'));

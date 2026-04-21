@@ -187,7 +187,7 @@ export interface ShodanDomainRecord {
   lastSeen?: string;
 }
 
-export type ShodanModuleResult =
+export type ExposureModuleResult =
   | {
       ok: true;
       kind: 'host';
@@ -229,6 +229,9 @@ export type ShodanModuleResult =
       };
     };
 
+/** @deprecated Use ExposureModuleResult. Kept as an alias to avoid breaking imports. */
+export type ShodanModuleResult = ExposureModuleResult;
+
 export interface AnalyzeModules {
   dns?: DnsModuleResult;
   http?: HttpModuleResult;
@@ -236,7 +239,7 @@ export interface AnalyzeModules {
   tls?: TlsModuleResult;
   inference?: InferenceModuleResult;
   ip?: IpModuleResult;
-  shodan?: ShodanModuleResult;
+  exposure?: ExposureModuleResult;
 }
 
 export interface AnalyzeReport {

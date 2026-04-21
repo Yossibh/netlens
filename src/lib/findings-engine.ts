@@ -402,9 +402,9 @@ const ipRules: Rule[] = [
   },
 ];
 
-const shodanRules: Rule[] = [
+const exposureRules: Rule[] = [
   ({ modules }) => {
-    const s = modules.shodan;
+    const s = modules.exposure;
     if (!s || !s.ok || s.skipped || s.kind !== 'host') return [];
     const out: Finding[] = [];
     if (s.vulns && s.vulns.length) {
@@ -442,7 +442,7 @@ const shodanRules: Rule[] = [
   },
 ];
 
-const ALL_RULES: Rule[] = [...dnsRules, ...emailRules, ...httpRules, ...tlsRules, ...inferenceRules, ...ipRules, ...shodanRules];
+const ALL_RULES: Rule[] = [...dnsRules, ...emailRules, ...httpRules, ...tlsRules, ...inferenceRules, ...ipRules, ...exposureRules];
 
 export function runFindings(ctx: { input: NormalizedInput; modules: AnalyzeModules }): Finding[] {
   const findings: Finding[] = [];

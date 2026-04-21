@@ -98,18 +98,19 @@ export async function buildReport(rawInput: string, opts: BuildReportOptions = {
       : undefined;
   modules.inference = await inferInfrastructure(modules.dns, modules.http, directIp);
 
-  // Shodan (paid). Fire only if a key is bound. Per-IP uses the actual IP input
-  // or the resolved first A record; per-domain uses the domain.
+  // Exposure intel (powered by an external posture-intel provider, requires
+  // SHODAN_API_KEY env binding). Fire only if a key is bound. Per-IP uses the
+  // actual IP input or the resolved first A record; per-domain uses the domain.
   if (opts.shodanApiKey) {
     const shodanTargetIp = input.ip ?? modules.dns?.records.A[0]?.data;
     const shodanPromises: Array<Promise<void>> = [];
     if (input.type === 'ip' && shodanTargetIp) {
       shodanPromises.push(
-        shodanHost(shodanTargetIp, opts.shodanApiKey).then((r) => { modules.shodan = r; })
+        shodanHost(shodanTargetIp, opts.shodanApiKey).then((r) => { modules.exposure = r; })
       );
     } else if (domain) {
       shodanPromises.push(
-        shodanDomain(domain, opts.shodanApiKey).then((r) => { modules.shodan = r; })
+        shodanDomain(domain, opts.shodanApiKey).then((r) => { modules.exposure = r; })
       );
     }
     await Promise.all(shodanPromises);
@@ -137,7 +138,7 @@ export async function buildReport(rawInput: string, opts: BuildReportOptions = {
       tls: modules.tls,
       inference: modules.inference,
       ip: modules.ip,
-      shodan: modules.shodan,
+      exposure: modules.exposure,
     },
     meta: {
       generatedAt: new Date().toISOString(),
@@ -189,8 +190,8 @@ function buildHighlights(input: NormalizedInput, modules: AnalyzeModules, findin
   } else if (modules.tls?.liveTls?.version) {
     out.push(`TLS: ${modules.tls.liveTls.version}${modules.tls.liveTls.cipher ? ' ' + modules.tls.liveTls.cipher : ''}`);
   }
-  if (modules.shodan && modules.shodan.ok && !modules.shodan.skipped) {
-    const s = modules.shodan;
+  if (modules.exposure && modules.exposure.ok && !modules.exposure.skipped) {
+    const s = modules.exposure;
     if (s.kind === 'host') {
       const ports = s.ports?.length ? `${s.ports.length} ports` : 'no open ports seen';
       const vulns = s.vulns?.length ? `${s.vulns.length} CVEs` : '';
