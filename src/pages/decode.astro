@@ -1,0 +1,123 @@
+---
+import Layout from '../components/Layout.astro';
+---
+<Layout title="netrecon - decode" description="Client-side decoder for JWT, base64, URL-encoded, hex, JSON, UUID, ULID, and timestamps. Nothing leaves your browser.">
+  <section class="decode-hero">
+    <div class="prompt mono">$ netrecon decode</div>
+    <h1>Decode anything.</h1>
+    <p class="tagline">JWT · base64 · base64url · URL-encoded · hex · JSON · UUID · ULID · Unix timestamp</p>
+    <p class="privacy-note">
+      <span class="lock">&#128274;</span>
+      Runs entirely in your browser. Tokens, cookies, and secrets never leave this page - no network request, no logs.
+    </p>
+  </section>
+
+  <section class="decode-input">
+    <textarea id="decode-in" spellcheck="false" autocomplete="off" placeholder="Paste a JWT, base64 string, URL-encoded value, hex, JSON, UUID/ULID, or Unix timestamp..."></textarea>
+    <div class="decode-examples">
+      try:
+      <button type="button" data-sample="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6Illvc3NpIEJlbiBIYWdhaSIsImlhdCI6MTUxNjIzOTAyMiwiZXhwIjo5OTk5OTk5OTk5fQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c">JWT</button>
+      <button type="button" data-sample="aGVsbG8gd29ybGQ=">base64</button>
+      <button type="button" data-sample="hello%20world%21%20%26%20caf%C3%A9">URL-encoded</button>
+      <button type="button" data-sample="deadbeefcafe">hex</button>
+      <button type="button" data-sample='{"user":"yossi","roles":["sre","security"]}'>JSON</button>
+      <button type="button" data-sample="01ARZ3NDEKTSV4RRFFQ69G5FAV">ULID</button>
+      <button type="button" data-sample="1700000000">timestamp</button>
+    </div>
+  </section>
+
+  <section id="decode-out" class="decode-output"></section>
+
+  <script>
+    import { detectKinds, decodeByKind, type DecodeKind, type DecodeResult } from '../lib/decoders';
+
+    const input = document.getElementById('decode-in') as HTMLTextAreaElement;
+    const output = document.getElementById('decode-out') as HTMLElement;
+
+    function h(tag: string, attrs: Record<string, string> = {}, ...kids: (Node | string | null)[]): HTMLElement {
+      const el = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') el.className = v;
+        else el.setAttribute(k, v);
+      }
+      for (const c of kids) {
+        if (c == null) continue;
+        el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+      }
+      return el;
+    }
+
+    function renderResult(r: DecodeResult): HTMLElement {
+      const card = h('div', { class: 'decode-card ' + (r.ok ? 'ok' : 'err') });
+      card.appendChild(h('div', { class: 'decode-card-head' },
+        h('span', { class: 'decode-kind mono' }, r.label),
+        r.ok ? h('span', { class: 'decode-badge ok' }, 'decoded') : h('span', { class: 'decode-badge err' }, 'error'),
+      ));
+      if (r.error) card.appendChild(h('div', { class: 'decode-err-msg' }, r.error));
+      if (r.ok && r.output) {
+        const pre = h('pre', { class: 'decode-output-pre' }, r.output);
+        card.appendChild(pre);
+      }
+      if (r.details && Object.keys(r.details).length) {
+        const detBtn = h('button', { type: 'button', class: 'decode-toggle' }, 'details');
+        const detBlock = h('pre', { class: 'decode-details hidden' }, JSON.stringify(r.details, null, 2));
+        detBtn.addEventListener('click', () => detBlock.classList.toggle('hidden'));
+        card.appendChild(detBtn);
+        card.appendChild(detBlock);
+      }
+      if (r.notes && r.notes.length) {
+        const nl = h('ul', { class: 'decode-notes' });
+        for (const n of r.notes) nl.appendChild(h('li', {}, n));
+        card.appendChild(nl);
+      }
+      return card;
+    }
+
+    function render(value: string) {
+      output.innerHTML = '';
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      const kinds = detectKinds(trimmed);
+      if (!kinds.length) {
+        output.appendChild(h('div', { class: 'decode-card err' },
+          h('div', { class: 'decode-card-head' }, h('span', { class: 'decode-kind mono' }, 'unrecognized')),
+          h('div', { class: 'decode-err-msg' }, 'No known format matches this input.'),
+        ));
+        return;
+      }
+      output.appendChild(h('div', { class: 'decode-detected' },
+        h('span', { class: 'decode-detected-label' }, 'detected: '),
+        ...kinds.map((k) => h('span', { class: 'decode-chip' }, k)),
+      ));
+      const results: DecodeResult[] = [];
+      for (const k of kinds) {
+        const r = decodeByKind(trimmed, k as DecodeKind);
+        if (r.ok) results.push(r);
+      }
+      if (!results.length) {
+        const first = decodeByKind(trimmed, kinds[0] as DecodeKind);
+        output.appendChild(renderResult(first));
+        return;
+      }
+      for (const r of results) output.appendChild(renderResult(r));
+    }
+
+    let timer: number | undefined;
+    input.addEventListener('input', () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(() => render(input.value), 120);
+    });
+
+    document.querySelectorAll<HTMLButtonElement>('[data-sample]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        input.value = btn.dataset.sample || '';
+        render(input.value);
+        input.focus();
+      });
+    });
+
+    // Accept ?q= deep links (hash-fragment to avoid any server roundtrip)
+    const hash = location.hash.startsWith('#q=') ? decodeURIComponent(location.hash.slice(3)) : '';
+    if (hash) { input.value = hash; render(hash); }
+  </script>
+</Layout>

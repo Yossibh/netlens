@@ -320,6 +320,42 @@ import Layout from '../components/Layout.astro';
       return tbl;
     }
 
+    // Lightweight detection for inline decode affordance. Matches decoders.ts heuristics.
+    function looksDecodable(value) {
+      if (!value || typeof value !== 'string') return null;
+      const v = value.trim();
+      if (v.length < 12) return null;
+      if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/.test(v)) return 'JWT';
+      if (/%[0-9a-fA-F]{2}/.test(v)) return 'URL-encoded';
+      const cleaned = v.replace(/\s+/g, '');
+      if (/^[A-Za-z0-9+/=]+$/.test(cleaned) && cleaned.length % 4 === 0 && cleaned.length >= 16) return 'base64';
+      if (/^[A-Za-z0-9_-]+={0,2}$/.test(cleaned) && cleaned.length >= 16) return 'base64url';
+      return null;
+    }
+
+    function renderHeadersWithDecode(headers) {
+      const tbl = h('table', { class: 'kv' });
+      const entries = Object.entries(headers);
+      for (const [k, v] of entries) {
+        const valStr = typeof v === 'string' ? v : JSON.stringify(v);
+        const kind = looksDecodable(valStr);
+        const valCell = h('td', {});
+        valCell.appendChild(document.createTextNode(valStr));
+        if (kind) {
+          const link = h('a', {
+            class: 'inline-decode',
+            href: '/decode#q=' + encodeURIComponent(valStr),
+            target: '_blank',
+            rel: 'noopener',
+            title: 'Open in decoder (stays in your browser)',
+          }, 'decode ' + kind);
+          valCell.appendChild(link);
+        }
+        tbl.appendChild(h('tr', {}, h('td', {}, k), valCell));
+      }
+      return tbl;
+    }
+
     function badge(sev) {
       return h('span', { class: `badge ${sev}` }, sev);
     }
@@ -497,7 +533,7 @@ import Layout from '../components/Layout.astro';
         httpPanel.appendChild(h('h3', {}, 'Cache headers'));
         httpPanel.appendChild(kv(Object.entries(http.cacheHeaders).map(([k, v]) => [k, v || '(missing)'])));
         httpPanel.appendChild(h('h3', {}, 'All response headers'));
-        httpPanel.appendChild(h('pre', { class: 'json' }, JSON.stringify(http.headers, null, 2)));
+        httpPanel.appendChild(renderHeadersWithDecode(http.headers));
       }
       panels['HTTP'] = httpPanel;
       reportEl.appendChild(httpPanel);
