@@ -47,7 +47,7 @@ before `fetch()`, including on every redirect Location header - so an
 attacker cannot bypass the input-level check by making a public host 301 to
 `http://169.254.169.254`.
 
-### 2. Amplification / DoS of third parties - PARTIAL MITIGATION
+### 2. Amplification / DoS of third parties - MITIGATED
 **Finding.** No rate limiting on `/api/analyze` or `/api/compare`. Each call
 triggers one HTTP fetch to the user-supplied target plus several third-party
 API calls. Amplification factor per request is modest (1:1 against the target),
@@ -61,18 +61,28 @@ as the source.
 - User-Agent is explicit (`netrecon/0.1 (+https://netrecon.pages.dev)`), so the
   target can filter us out if we misbehave.
 
-**Recommended (operator action - not code).** Enable Cloudflare Rate Limiting
-rules in the dashboard:
-```
-If (http.request.uri.path in {"/api/analyze", "/api/compare"})
-  and rate(10 per minute per source IP)
-Then block for 10 minutes
-```
-Free plan allows 10k rate-limit events/month; more than enough for a personal
-MVP. Do the same for `/api/whoami` at a looser threshold (e.g. 60/min).
+**Recommended (operator action - not code).** ~~Enable Cloudflare Rate Limiting
+rules in the dashboard~~ - *not available for `*.pages.dev` (shared zone).*
 
-An in-Worker token bucket via Cloudflare KV is also an option and is on the
-roadmap but not required for launch.
+**Shipped: in-code rate limiter** via Pages Functions middleware
+(`functions/api/_middleware.ts`) using the Cloudflare Cache API as a per-colo
+cross-invocation counter:
+
+| Path family         | Limit        |
+| ------------------- | ------------ |
+| `/api/analyze`      | 10 req/min   |
+| `/api/compare`      | 10 req/min   |
+| `/api/whoami`       | 60 req/min   |
+| `/api/health`       | unlimited    |
+| `/api/tools`        | unlimited    |
+
+Over-limit requests return HTTP 429 with `retry-after` and
+`x-ratelimit-{limit,remaining,reset}` headers. Counters are per-colo (not
+global) - a distributed low-rate flood that spreads across many CF colos is
+caught upstream by Cloudflare's DDoS layer. Tune thresholds in `policyFor()`.
+
+A stronger global rate-limiter (Durable Object or KV-backed token bucket) is on
+the roadmap but not required for launch.
 
 ### 3. Upstream credit burn (Shodan) - MITIGATED
 **Finding.** Shodan's `/shodan/host/{ip}` costs 1 query credit per call. An
@@ -88,10 +98,10 @@ the operator's credit pool.
 - Domain queries use the **free** `/shodan/host/count` endpoint (zero query
   credits). Only host-lookup for direct IP input consumes credits.
 
-**Recommended.** Combine with the Cloudflare Rate Limiting rule above. Worst
-case with 10/min per IP limit: ~14,400 requests/day from a single IP = 14,400
-Shodan credits/day. Acceptable ceiling for a personal plan; further tighten to
-3/min if the account has a lower monthly cap.
+**Recommended.** Combined with the shipped in-code rate limiter (10/min/IP per
+colo), worst-case single-IP Shodan consumption is bounded to ~10 credits/min
+per colo. Acceptable for a personal plan; tighten `policyFor('/api/analyze')`
+to 3/min if the account has a lower monthly cap.
 
 ### 4. Worker CPU-time abuse - MITIGATED
 **Finding.** Workers free tier: 100k requests/day, 10ms CPU/request. netrecon
@@ -132,8 +142,8 @@ deployment. They should be rotated and the old ones revoked. This is tracked
 in the top-level plan.
 
 ## Operator checklist
-- [ ] Enable Cloudflare Rate Limiting rule for `/api/*` (dashboard, 1 minute).
+- [x] ~~Enable Cloudflare Rate Limiting rule for `/api/*`~~ - shipped in-code via `functions/api/_middleware.ts`.
 - [ ] Rotate `CLOUDFLARE_API_TOKEN` and `SHODAN_API_KEY`.
-- [ ] Monitor Shodan monthly credit usage; tune rate-limit threshold to match.
+- [ ] Monitor Shodan monthly credit usage; tune thresholds in `_middleware.ts::policyFor()` to match.
 - [ ] Re-run `npx vitest run` after any change to input handling or
       `http.ts` - the SSRF guard has dedicated tests under `tests/security.test.ts`.
