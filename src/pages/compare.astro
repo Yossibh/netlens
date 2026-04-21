@@ -42,7 +42,9 @@ import Layout from '../components/Layout.astro';
         let html = `<div class="panel"><h2>Differences (${body.summary.totalDifferences})</h2>`;
         if (!body.differences.length) html += '<div class="loading">No structural differences found in compared sections.</div>';
         else {
-          html += '<table class="kv"><tr><td>section.key</td><td>A</td><td>B</td></tr>';
+          const labelA = (body.a && body.a.input && body.a.input.raw) || 'A';
+          const labelB = (body.b && body.b.input && body.b.input.raw) || 'B';
+          html += `<table class="kv"><tr><th>section.key</th><th>A · <code>${escapeHtml(labelA)}</code></th><th>B · <code>${escapeHtml(labelB)}</code></th></tr>`;
           for (const d of body.differences) {
             html += `<tr><td>${escapeHtml(d.section + '.' + d.key)}</td><td><code>${fmt(d.a)}</code></td><td><code>${fmt(d.b)}</code></td></tr>`;
           }
