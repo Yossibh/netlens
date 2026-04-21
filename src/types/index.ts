@@ -232,11 +232,46 @@ export type ExposureModuleResult =
 /** @deprecated Use ExposureModuleResult. Kept as an alias to avoid breaking imports. */
 export type ShodanModuleResult = ExposureModuleResult;
 
+export interface PeerTlsCertificate {
+  subject: string;
+  issuer: string;
+  notBefore: string;
+  notAfter: string;
+  sans: string[];
+  signatureAlgorithm: string;
+  publicKeyAlgorithm: string;
+  serialNumber: string;
+  fingerprintSha256: string;
+  selfSigned: boolean;
+  expired: boolean;
+  daysUntilExpiry: number;
+}
+
+export interface PeerTlsModuleResult {
+  ok: boolean;
+  skipped?: boolean;
+  skipReason?: string;
+  host?: string;
+  port?: number;
+  source?: 'raw-tcp' | 'browser-rendering';
+  negotiatedVersion?: string;
+  cipherSuite?: string;
+  certs?: PeerTlsCertificate[];
+  hostnameMatch?: boolean;
+  error?: string;
+  alert?: { level: number; description: string };
+  durationMs?: number;
+  notes?: string[];
+  fellBackTo?: 'browser-rendering';
+  fastPathError?: string;
+}
+
 export interface AnalyzeModules {
   dns?: DnsModuleResult;
   http?: HttpModuleResult;
   email?: EmailModuleResult;
   tls?: TlsModuleResult;
+  livetls?: PeerTlsModuleResult;
   inference?: InferenceModuleResult;
   ip?: IpModuleResult;
   exposure?: ExposureModuleResult;

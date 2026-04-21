@@ -442,7 +442,107 @@ const exposureRules: Rule[] = [
   },
 ];
 
-const ALL_RULES: Rule[] = [...dnsRules, ...emailRules, ...httpRules, ...tlsRules, ...inferenceRules, ...ipRules, ...exposureRules];
+// Live peer TLS rules ----------------------------------------------------------
+const livetlsRules: Rule[] = [
+  ({ modules, input }) => {
+    const lt = modules.livetls;
+    if (!lt?.ok || !lt.certs?.[0] || !input.domain) return [];
+    const c = lt.certs[0];
+    const out: Finding[] = [];
+    if (c.expired) {
+      out.push(f(
+        'livetls.peer-expired',
+        'high',
+        'Peer is serving an expired certificate',
+        'A live TLS handshake returned a certificate whose notAfter is in the past. Monitoring that relies on CT logs alone will miss this — CT shows certs that were issued, not what is currently deployed.',
+        [`notAfter: ${c.notAfter}`, `source: ${lt.source ?? 'unknown'}`, `subject: ${c.subject}`],
+        ['Deploy the renewed certificate to the origin.', 'Verify your renewal automation (ACME / cert-manager) is running.'],
+        [`openssl s_client -connect ${input.domain}:443 -servername ${input.domain} </dev/null | openssl x509 -noout -dates`],
+        'livetls',
+      ));
+    } else if (c.daysUntilExpiry >= 0 && c.daysUntilExpiry < 14) {
+      out.push(f(
+        'livetls.peer-expiring-soon',
+        'medium',
+        `Peer certificate expires in ${c.daysUntilExpiry} day(s)`,
+        'The cert actually being served is close to expiry. This is the authoritative signal, not CT logs.',
+        [`notAfter: ${c.notAfter}`, `source: ${lt.source ?? 'unknown'}`],
+        ['Confirm renewal automation is queued to run before the expiry date.'],
+        [`openssl s_client -connect ${input.domain}:443 -servername ${input.domain} </dev/null | openssl x509 -noout -dates`],
+        'livetls',
+      ));
+    }
+    if (lt.hostnameMatch === false) {
+      out.push(f(
+        'livetls.hostname-mismatch',
+        'high',
+        'Peer certificate SANs do not match the requested hostname',
+        'The certificate served at this hostname is not valid for it. Browsers will show a NET::ERR_CERT_COMMON_NAME_INVALID error.',
+        [`subject: ${c.subject}`, `SANs: ${c.sans.join(', ') || '(none)'}`],
+        ['Check origin routing / SNI configuration on the load balancer.', 'Confirm the correct cert is bound to this hostname.'],
+        [`openssl s_client -connect ${input.domain}:443 -servername ${input.domain} </dev/null | openssl x509 -noout -subject -ext subjectAltName`],
+        'livetls',
+      ));
+    }
+    if (c.selfSigned) {
+      out.push(f(
+        'livetls.self-signed',
+        'high',
+        'Peer is serving a self-signed certificate',
+        'Browsers and most clients will reject this connection. Self-signed certs are acceptable for local testing only.',
+        [`subject: ${c.subject}`, `issuer: ${c.issuer || '(empty)'}`],
+        ['Deploy a certificate from a publicly trusted CA (Let\'s Encrypt, Google Trust Services, etc.).'],
+        [`openssl s_client -connect ${input.domain}:443 -servername ${input.domain} </dev/null | openssl x509 -noout -issuer -subject`],
+        'livetls',
+      ));
+    }
+    return out;
+  },
+  // Cross-check: CT vs peer cert.
+  ({ modules, input }) => {
+    const lt = modules.livetls;
+    const ct = modules.tls;
+    if (!lt?.ok || !lt.certs?.[0] || !ct?.latestCertificate || !input.domain) return [];
+    const peer = lt.certs[0];
+    const ctCert = ct.latestCertificate;
+    // Compare notAfter. Newer issuance in CT that isn't yet deployed is normal
+    // (CT sees issuance instantly, deployment may lag by minutes to hours).
+    // Only flag if the peer is actively expired while CT shows something newer.
+    if (peer.expired && new Date(ctCert.notAfter).getTime() > Date.now()) {
+      return [
+        f(
+          'livetls.ct-drift-peer-expired',
+          'high',
+          'CT logs show a valid cert but peer is still serving an expired one',
+          'A newer certificate has been issued (visible in Certificate Transparency) and is still valid, but the origin is serving an older, expired cert. This is classic deployment drift: issuance succeeded, deployment did not.',
+          [`CT latestCertificate.notAfter: ${ctCert.notAfter}`, `Peer cert notAfter: ${peer.notAfter}`],
+          ['Redeploy the newer cert from the CT log entry to the origin.', 'Verify the CD pipeline that installs renewed certs is running.'],
+          [`openssl s_client -connect ${input.domain}:443 -servername ${input.domain} </dev/null | openssl x509 -noout -dates`],
+          'livetls',
+        ),
+      ];
+    }
+    // Informational: peer notAfter differs from CT latest notAfter (both valid).
+    // Don't escalate — newer CT cert not yet deployed is normal.
+    if (ctCert.notAfter !== peer.notAfter && !peer.expired && ctCert.daysUntilExpiry > 0) {
+      return [
+        f(
+          'livetls.ct-peer-notafter-differs',
+          'info',
+          'Most recent CT cert differs from peer cert',
+          'CT logs show a more recent issuance than what the origin is currently serving. Usually normal right after renewal — issuance is instant but deployment lags. Worth watching if the gap persists.',
+          [`CT latest notAfter: ${ctCert.notAfter}`, `Peer notAfter: ${peer.notAfter}`, `Peer source: ${lt.source ?? 'unknown'}`],
+          ['Monitor; if the peer does not catch up within your usual deploy window, investigate.'],
+          [],
+          'livetls',
+        ),
+      ];
+    }
+    return [];
+  },
+];
+
+const ALL_RULES: Rule[] = [...dnsRules, ...emailRules, ...httpRules, ...tlsRules, ...livetlsRules, ...inferenceRules, ...ipRules, ...exposureRules];
 
 export function runFindings(ctx: { input: NormalizedInput; modules: AnalyzeModules }): Finding[] {
   const findings: Finding[] = [];

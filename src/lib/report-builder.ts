@@ -1,4 +1,4 @@
-import type { AnalyzeModules, AnalyzeReport, CompareReport, NormalizedInput } from '@/types';
+import type { AnalyzeModules, AnalyzeReport, CompareReport, NormalizedInput, PeerTlsModuleResult } from '@/types';
 import { detectInput, toProbeUrl } from './input-detection';
 import { resolveAll } from './providers/dns';
 import { inspectHttp } from './providers/http';
@@ -7,13 +7,20 @@ import { inspectTls } from './providers/tls';
 import { inferInfrastructure } from './providers/inference';
 import { analyzeIp } from './providers/ip';
 import { shodanHost, shodanDomain } from './providers/shodan';
+// tls-peer is dynamically imported below so the Astro static build (which
+// crawls tools.ts → report-builder transitively from mcp.astro) doesn't try
+// to resolve the Workers-only `cloudflare:sockets` module.
 import { runFindings, riskLevel } from './findings-engine';
 import { generateCommands } from './commands';
 
 const VERSION = '0.1.0';
 
+export type LiveTlsMode = 'off' | 'fast' | 'full';
+
 export interface BuildReportOptions {
   shodanApiKey?: string;
+  browserBinding?: unknown;
+  livetlsMode?: LiveTlsMode;
 }
 
 export async function buildReport(rawInput: string, opts: BuildReportOptions = {}): Promise<AnalyzeReport> {
@@ -51,8 +58,37 @@ export async function buildReport(rawInput: string, opts: BuildReportOptions = {
     }));
   }
 
-  // HTTP + Email run in parallel; TLS waits on HTTP so it can pick up
-  // live TLS version/cipher from the probe response.cf.
+  // HTTP + Email + live peer TLS run in parallel; CT-logs TLS waits on HTTP so
+  // it can pick up live TLS version/cipher from the probe response.cf.
+  // Live peer TLS fires immediately against the domain (no dependency on HTTP)
+  // so wall-clock stays flat in 'fast' mode.
+  const mode: LiveTlsMode = opts.livetlsMode ?? 'fast';
+  const livetlsHost = domain;
+  const livetlsPromise: Promise<PeerTlsModuleResult> = (() => {
+    if (mode === 'off') {
+      return Promise.resolve({ ok: false, skipped: true, skipReason: 'Live peer TLS disabled for this request.' });
+    }
+    if (!livetlsHost) {
+      return Promise.resolve({
+        ok: false, skipped: true,
+        skipReason: input.type === 'ip'
+          ? 'Live peer TLS requires a hostname (SNI). IP-only input cannot set SNI.'
+          : 'Live peer TLS requires a hostname.',
+      });
+    }
+    const browserForThisMode = mode === 'full' ? opts.browserBinding : undefined;
+    return import('./tls-peer')
+      .then(({ inspectPeerTls }) => inspectPeerTls(livetlsHost, 443, browserForThisMode))
+      .then((r) => ({ ...r } as PeerTlsModuleResult))
+      .catch((err) => ({
+        ok: false,
+        host: livetlsHost,
+        port: 443,
+        error: err instanceof Error ? err.message : String(err),
+        notes: [],
+      } satisfies PeerTlsModuleResult));
+  })();
+
   const [http, email] = await Promise.all([
     probeUrl
       ? inspectHttp(probeUrl)
@@ -91,6 +127,7 @@ export async function buildReport(rawInput: string, opts: BuildReportOptions = {
   modules.http = http;
   modules.email = email;
   modules.tls = tls;
+  modules.livetls = await livetlsPromise;
   const directIp = modules.ip?.asn
     ? { ip: modules.ip.ip, asn: modules.ip.asn.asn, owner: modules.ip.asn.owner, cc: modules.ip.asn.cc, registry: modules.ip.asn.registry }
     : modules.ip
@@ -136,6 +173,7 @@ export async function buildReport(rawInput: string, opts: BuildReportOptions = {
       http: modules.http,
       email: modules.email,
       tls: modules.tls,
+      livetls: modules.livetls,
       inference: modules.inference,
       ip: modules.ip,
       exposure: modules.exposure,
@@ -185,7 +223,11 @@ function buildHighlights(input: NormalizedInput, modules: AnalyzeModules, findin
     const dmarc = modules.email.dmarc?.present ? `DMARC✓(${modules.email.dmarc.policy})` : 'DMARC✗';
     out.push(`Email: ${spf} ${dmarc}`);
   }
-  if (modules.tls?.latestCertificate) {
+  if (modules.livetls?.ok && modules.livetls.certs?.[0]) {
+    const c = modules.livetls.certs[0];
+    const src = modules.livetls.source === 'browser-rendering' ? 'live-browser' : 'live-peer';
+    out.push(`TLS (${src}): ${modules.livetls.negotiatedVersion ?? 'unknown'} · expires in ${c.daysUntilExpiry}d`);
+  } else if (modules.tls?.latestCertificate) {
     out.push(`TLS (CT): expires in ${modules.tls.latestCertificate.daysUntilExpiry}d`);
   } else if (modules.tls?.liveTls?.version) {
     out.push(`TLS: ${modules.tls.liveTls.version}${modules.tls.liveTls.cipher ? ' ' + modules.tls.liveTls.cipher : ''}`);

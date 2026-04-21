@@ -21,6 +21,10 @@ import Layout from '../components/Layout.astro';
       <input id="input" type="text" placeholder="example.com  ·  https://example.com/path  ·  1.1.1.1" required />
       <button class="primary" type="submit" id="go">Analyze</button>
     </form>
+    <label class="live-toggle mono" title="Enables Cloudflare Browser Rendering fallback for CF-fronted / TLS 1.3-only targets. Adds ~3-5s when it fires.">
+      <input type="checkbox" id="live-full" />
+      <span>live TLS: full (browser fallback for CF-fronted hosts; slower)</span>
+    </label>
     <div class="examples">
       try:
       <button type="button" data-ex="cloudflare.com">cloudflare.com</button>
@@ -182,7 +186,9 @@ import Layout from '../components/Layout.astro';
       const progress = renderProgress(statusEl, value);
 
       try {
-        const res = await fetch(`/api/analyze?input=${encodeURIComponent(value)}`, { headers: { accept: 'application/json' } });
+        const liveFullEl = document.getElementById('live-full');
+        const liveMode = liveFullEl && liveFullEl.checked ? '&live=full' : '';
+        const res = await fetch(`/api/analyze?input=${encodeURIComponent(value)}${liveMode}`, { headers: { accept: 'application/json' } });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
         await progress.finish();
@@ -594,6 +600,62 @@ import Layout from '../components/Layout.astro';
       } else {
         tlsPanel.appendChild(h('div', { class: 'loading' }, `No certificates found in CT logs for ${tls.hostSearched || 'this host'}.`));
         renderLiveTls();
+      }
+
+      // Live peer TLS section (new) — the actual cert being served right now,
+      // via raw-TCP fast path or Browser Rendering fallback.
+      const lt = report.modules.livetls;
+      if (lt) {
+        tlsPanel.appendChild(h('hr', { class: 'sep' }));
+        tlsPanel.appendChild(h('h3', {}, 'Live peer certificate'));
+        if (lt.skipped) {
+          tlsPanel.appendChild(h('div', { class: 'loading' }, lt.skipReason || 'Live peer TLS skipped.'));
+        } else if (!lt.ok) {
+          const reason = lt.error || 'Live peer TLS probe failed.';
+          tlsPanel.appendChild(h('div', { class: 'loading' }, reason));
+          if (lt.alert && lt.alert.description) {
+            tlsPanel.appendChild(h('div', { class: 'loading mono' }, 'TLS alert: ' + lt.alert.description));
+          }
+          if (!report.modules.livetls.source || report.modules.livetls.source === 'raw-tcp') {
+            tlsPanel.appendChild(h('div', { class: 'loading' }, 'Tip: tick "live TLS: full" above to enable Browser Rendering fallback for CF-fronted and TLS 1.3-only targets.'));
+          }
+        } else if (lt.certs && lt.certs.length) {
+          const c = lt.certs[0];
+          const sourceLabel = lt.source === 'browser-rendering'
+            ? `Browser Rendering (fallback${lt.fastPathError ? ': raw TCP failed — ' + lt.fastPathError : ''})`
+            : 'Raw TCP fast path';
+          const note = lt.source === 'browser-rendering'
+            ? 'Source: live handshake via headless Chromium (Cloudflare Browser Rendering). This is what a real browser sees.'
+            : 'Source: live TLS 1.2 handshake over raw TCP. Certificate actually being served right now.';
+          tlsPanel.appendChild(h('div', { class: 'loading' }, note));
+          tlsPanel.appendChild(kv([
+            ['Source', sourceLabel + (lt.durationMs != null ? ` · ${lt.durationMs}ms` : '')],
+            ['Negotiated version', lt.negotiatedVersion || '-'],
+            ['Cipher', lt.cipherSuite || '-'],
+            ['Subject', c.subject || '-'],
+            ['Issuer', c.issuer || '(not exposed by Chrome)'],
+            ['Hostname match', lt.hostnameMatch === true ? '✓' : lt.hostnameMatch === false ? '✗' : '-'],
+            ['Not Before', c.notBefore || '-'],
+            ['Not After', c.notAfter || '-'],
+            ['Days until expiry', c.daysUntilExpiry],
+            ['Expired', c.expired ? 'yes' : 'no'],
+            ['Self-signed', c.selfSigned ? 'yes' : 'no'],
+            ['Signature alg', c.signatureAlgorithm || '-'],
+            ['Public key alg', c.publicKeyAlgorithm || '-'],
+            ['Serial', c.serialNumber || '-'],
+            ['SHA-256 fingerprint', c.fingerprintSha256 || '-'],
+          ]));
+          if (c.sans && c.sans.length) {
+            tlsPanel.appendChild(h('h4', {}, 'SANs (peer)'));
+            tlsPanel.appendChild(h('pre', { class: 'cmd' }, c.sans.join('\n')));
+          }
+          if (lt.notes && lt.notes.length) {
+            tlsPanel.appendChild(h('h4', {}, 'Notes'));
+            const ul = h('ul', { class: 'note-list' });
+            lt.notes.forEach(function (n) { ul.appendChild(h('li', {}, n)); });
+            tlsPanel.appendChild(ul);
+          }
+        }
       }
       panels['TLS'] = tlsPanel;
       reportEl.appendChild(tlsPanel);
