@@ -44,7 +44,7 @@ import Layout from '../components/Layout.astro';
         else {
           html += '<table class="kv"><tr><td>section.key</td><td>A</td><td>B</td></tr>';
           for (const d of body.differences) {
-            html += `<tr><td>${d.section}.${d.key}</td><td><code>${escapeHtml(JSON.stringify(d.a))}</code></td><td><code>${escapeHtml(JSON.stringify(d.b))}</code></td></tr>`;
+            html += `<tr><td>${escapeHtml(d.section + '.' + d.key)}</td><td><code>${fmt(d.a)}</code></td><td><code>${fmt(d.b)}</code></td></tr>`;
           }
           html += '</table>';
         }
@@ -52,11 +52,16 @@ import Layout from '../components/Layout.astro';
         html += `<div class="panel"><h2>Raw comparison JSON</h2><pre class="json">${escapeHtml(JSON.stringify(body, null, 2))}</pre></div>`;
         out.innerHTML = html;
       } catch (err) {
-        st.innerHTML = `<div class="error">${err.message || err}</div>`;
+        st.innerHTML = `<div class="error">${escapeHtml(String(err.message || err))}</div>`;
       } finally {
         go.disabled = false;
       }
     });
-    function escapeHtml(s) { return s.replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])); }
+    function escapeHtml(s) { return String(s).replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])); }
+    function fmt(v) {
+      if (v === undefined) return '<span class="muted">—</span>';
+      const s = JSON.stringify(v);
+      return escapeHtml(s === undefined ? '—' : s);
+    }
   </script>
 </Layout>
