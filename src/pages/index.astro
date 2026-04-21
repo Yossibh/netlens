@@ -106,21 +106,126 @@ import Layout from '../components/Layout.astro';
 
       go.disabled = true;
       statusEl.classList.remove('hidden');
-      statusEl.innerHTML = '<div class="loading">analyzing… running DNS, HTTP, TLS, email, and inference modules in parallel.</div>';
+      statusEl.innerHTML = '';
       reportEl.classList.add('hidden');
       reportEl.innerHTML = '';
+
+      const progress = renderProgress(statusEl, value);
 
       try {
         const res = await fetch(`/api/analyze?input=${encodeURIComponent(value)}`, { headers: { accept: 'application/json' } });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        await progress.finish();
         renderReport(body);
       } catch (err) {
+        progress.abort();
         statusEl.innerHTML = `<div class="error">${(err && err.message) || err}</div>`;
       } finally {
         go.disabled = false;
       }
     });
+
+    // Staged progress panel. Since the backend runs all modules in parallel and
+    // returns a single response, we can't report true per-module progress. Instead
+    // we advance stages on a plausible schedule that visually matches what the
+    // pipeline is doing, and snap everything to 'done' when the response lands.
+    function renderProgress(mount, target) {
+      const stages = [
+        { id: 'detect',    label: 'detect input',        at: 80 },
+        { id: 'dns',       label: 'DNS records',         at: 250 },
+        { id: 'http',      label: 'HTTP probe + headers', at: 550 },
+        { id: 'email',     label: 'email posture',       at: 900 },
+        { id: 'tls',       label: 'TLS / CT logs',       at: 1200 },
+        { id: 'inference', label: 'CDN / ASN inference', at: 1600 },
+        { id: 'findings',  label: 'correlate findings',  at: 1900 },
+      ];
+      const panel = document.createElement('div');
+      panel.className = 'progress-panel';
+      panel.innerHTML = `
+        <div class="progress-head">
+          <span class="progress-prompt">$ netrecon analyze <span class="progress-target">${escapeHtml(target)}</span></span>
+          <span class="progress-pct" id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-bar-fill" id="progress-fill"></div></div>
+        <ul class="progress-steps">
+          ${stages.map(s => `<li id="step-${s.id}" class="pending"><span class="step-icon">○</span><span class="step-label">${s.label}</span><span class="step-detail"></span></li>`).join('')}
+        </ul>
+      `;
+      mount.appendChild(panel);
+
+      const fill = panel.querySelector('#progress-fill');
+      const pct = panel.querySelector('#progress-pct');
+      const total = stages[stages.length - 1].at + 400;
+      const startedAt = performance.now();
+      let aborted = false;
+      let finishing = false;
+
+      function setStep(id, state, detail) {
+        const el = panel.querySelector('#step-' + id);
+        if (!el) return;
+        el.classList.remove('pending','active','done','error');
+        el.classList.add(state);
+        const icon = el.querySelector('.step-icon');
+        icon.textContent = state === 'done' ? '✓' : state === 'error' ? '✗' : state === 'active' ? '◉' : '○';
+        if (detail) el.querySelector('.step-detail').textContent = detail;
+      }
+
+      // tick each stage active -> done on its scheduled offset
+      const timers = [];
+      let activeIdx = 0;
+      setStep(stages[0].id, 'active');
+      stages.forEach((s, i) => {
+        timers.push(setTimeout(() => {
+          if (aborted || finishing) return;
+          setStep(s.id, 'done');
+          if (i + 1 < stages.length) {
+            activeIdx = i + 1;
+            setStep(stages[i + 1].id, 'active');
+          }
+        }, s.at));
+      });
+
+      // Smooth bar animation driven by elapsed/total, capped at 92% until response lands.
+      const raf = { id: 0 };
+      function tick() {
+        if (aborted || finishing) return;
+        const elapsed = performance.now() - startedAt;
+        const frac = Math.min(0.92, elapsed / total);
+        fill.style.width = (frac * 100).toFixed(1) + '%';
+        pct.textContent = Math.round(frac * 100) + '%';
+        raf.id = requestAnimationFrame(tick);
+      }
+      raf.id = requestAnimationFrame(tick);
+
+      return {
+        async finish() {
+          finishing = true;
+          cancelAnimationFrame(raf.id);
+          timers.forEach(clearTimeout);
+          for (const s of stages) setStep(s.id, 'done');
+          fill.style.width = '100%';
+          pct.textContent = '100%';
+          // short beat so the user sees 100% before the report replaces it
+          await new Promise(r => setTimeout(r, 180));
+        },
+        abort() {
+          aborted = true;
+          cancelAnimationFrame(raf.id);
+          timers.forEach(clearTimeout);
+          const active = panel.querySelector('li.active');
+          if (active) {
+            active.classList.remove('active');
+            active.classList.add('error');
+            active.querySelector('.step-icon').textContent = '✗';
+          }
+        },
+      };
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
 
     function h(tag, attrs = {}, ...children) {
       const el = document.createElement(tag);
