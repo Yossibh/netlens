@@ -57,13 +57,15 @@ async function queryCertspotter(domain: string): Promise<TlsModuleResult | null>
     if (!res.ok) return null;
     const entries = (await res.json()) as CertspotterIssuance[];
     if (!entries.length) return { ok: true, source: 'certspotter', recentCount: 0 };
-    entries.sort((a, b) => new Date(b.not_before).getTime() - new Date(a.not_before).getTime());
-    const latest = entries[0]!;
+    const relevant = filterRelevantCertspotter(entries, domain);
+    const pool = relevant.length ? relevant : entries;
+    pool.sort((a, b) => new Date(b.not_before).getTime() - new Date(a.not_before).getTime());
+    const latest = pool[0]!;
     const daysUntilExpiry = Math.floor((new Date(latest.not_after).getTime() - Date.now()) / 86_400_000);
     return {
       ok: true,
       source: 'certspotter',
-      recentCount: entries.length,
+      recentCount: pool.length,
       latestCertificate: {
         issuer: latest.issuer?.name ?? 'unknown',
         notBefore: latest.not_before,
@@ -76,6 +78,24 @@ async function queryCertspotter(domain: string): Promise<TlsModuleResult | null>
   } catch {
     return null;
   }
+}
+
+// Large shared / multi-tenant certs (common with some SSL providers) can include
+// one of the target's subdomains among dozens of unrelated SANs. Those entries
+// are technically valid matches but don't represent the target's own cert. We
+// keep only certificates whose SANs are predominantly about the target apex.
+function filterRelevantCertspotter(entries: CertspotterIssuance[], domain: string): CertspotterIssuance[] {
+  const apex = domain.replace(/^www\./i, '').toLowerCase();
+  const suffix = '.' + apex;
+  return entries.filter((e) => {
+    const sans = e.dns_names.map((s) => s.toLowerCase());
+    if (!sans.length) return false;
+    const onTarget = sans.filter((s) => s === apex || s === '*.' + apex || s.endsWith(suffix) || s.endsWith('.' + apex)).length;
+    // require that at least half of SANs belong to the target apex, OR it's a
+    // small cert that explicitly names the target / a wildcard covering it.
+    if (sans.length <= 5 && onTarget >= 1) return true;
+    return onTarget / sans.length >= 0.5;
+  });
 }
 
 async function queryCrtSh(domain: string): Promise<TlsModuleResult | null> {
