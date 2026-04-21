@@ -1,7 +1,41 @@
 ---
 import Layout from '../components/Layout.astro';
+
+const homeSchema = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'netrecon',
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'Web',
+    url: 'https://netrecon.pages.dev',
+    description: 'Correlated network diagnostics for engineers. DNS, HTTP, TLS, email posture, and CDN inference - with findings, not just data.',
+    author: {
+      '@type': 'Person',
+      name: 'Yossi Ben Hagai',
+      url: 'https://yossibh.github.io/',
+      sameAs: [
+        'https://yossibh.github.io/',
+        'https://github.com/Yossibh',
+        'https://www.linkedin.com/in/yossibenhagai/',
+      ],
+    },
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'netrecon',
+    url: 'https://netrecon.pages.dev',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: 'https://netrecon.pages.dev/?input={input}',
+      'query-input': 'required name=input',
+    },
+  },
+];
 ---
-<Layout>
+<Layout schema={homeSchema}>
   <section class="hero">
     <div class="prompt mono" id="prompt-line"><span class="p-host">yossi@netrecon</span>:<span class="p-path">~</span>$ <span id="typed-cmd"></span><span class="cursor" id="cursor">&#9608;</span></div>
 

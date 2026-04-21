@@ -3,9 +3,23 @@ import '../styles/global.css';
 interface Props {
   title?: string;
   description?: string;
+  ogType?: 'website' | 'article' | 'profile';
+  ogImage?: string;
+  canonical?: string;
+  schema?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
-const { title = 'netrecon - see through the network', description = 'Correlated network diagnostics for engineers. DNS, HTTP, TLS, email posture, and CDN inference - with findings, not just data.' } = Astro.props;
+const {
+  title = 'netrecon - see through the network',
+  description = 'Correlated network diagnostics for engineers. DNS, HTTP, TLS, email posture, and CDN inference - with findings, not just data.',
+  ogType = 'website',
+  ogImage = '/og.svg',
+  canonical,
+  schema,
+} = Astro.props;
+const siteUrl = 'https://netrecon.pages.dev';
 const path = Astro.url.pathname;
+const canonicalUrl = canonical ?? new URL(path, siteUrl).toString();
+const ogImageUrl = ogImage.startsWith('http') ? ogImage : new URL(ogImage, siteUrl).toString();
 const isActive = (href: string) => {
   if (href === '/') return path === '/' || path === '';
   return path === href || path.startsWith(href + '/');
@@ -19,11 +33,26 @@ const isActive = (href: string) => {
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="color-scheme" content="dark" />
+    <link rel="canonical" href={canonicalUrl} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:site_name" content="netrecon" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+    <meta name="twitter:creator" content="@YossiBenHagai" />
+    <meta name="author" content="Yossi Ben Hagai" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='28'%3E%F0%9F%94%8D%3C/text%3E%3C/svg%3E" />
     <link rel="alternate" type="application/rss+xml" title="netrecon writing" href="/rss.xml" />
+    {schema && (
+      <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+    )}
+    <!-- Cloudflare Web Analytics (enabled via Pages dashboard auto-insert; placeholder below for manual override) -->
+    <!-- <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "REPLACE_ME"}'></script> -->
   </head>
   <body>
     <header class="site">

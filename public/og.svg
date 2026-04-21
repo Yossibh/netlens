@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="netrecon - see through the network">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0%" stop-color="#132029" />
+      <stop offset="100%" stop-color="#0a0e12" />
+    </radialGradient>
+    <radialGradient id="mark" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#5cd2a3" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#5cd2a3" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <!-- subtle scanlines -->
+  <g opacity="0.06">
+    <rect x="0" y="0" width="1200" height="630" fill="url(#scan)" />
+  </g>
+  <!-- radar mark -->
+  <g transform="translate(130,185)">
+    <circle cx="130" cy="130" r="125" fill="url(#mark)" />
+    <circle cx="130" cy="130" r="118" fill="none" stroke="#2f8b6d" stroke-width="2" />
+    <circle cx="130" cy="130" r="78" fill="none" stroke="#2f8b6d" stroke-width="2" />
+    <circle cx="130" cy="130" r="36" fill="none" stroke="#5cd2a3" stroke-width="2" />
+    <line x1="130" y1="6" x2="130" y2="254" stroke="#2f8b6d" stroke-width="1.2" />
+    <line x1="6" y1="130" x2="254" y2="130" stroke="#2f8b6d" stroke-width="1.2" />
+    <line x1="130" y1="130" x2="228" y2="50" stroke="#5cd2a3" stroke-width="4" stroke-linecap="round" />
+    <circle cx="228" cy="50" r="10" fill="#5cd2a3" />
+  </g>
+  <!-- wordmark -->
+  <g transform="translate(450,250)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <text x="0" y="0" font-size="104" font-weight="700" fill="#d7e1ea">net</text>
+    <text x="180" y="0" font-size="104" font-weight="700" fill="#5cd2a3">recon</text>
+    <text x="640" y="-8" font-size="104" font-weight="700" fill="#5cd2a3">.</text>
+  </g>
+  <!-- tagline -->
+  <text x="450" y="320" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="30" fill="#8a99a8">see through the network</text>
+  <!-- modules -->
+  <g transform="translate(450,380)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+     font-size="22" fill="#5cd2a3">
+    <text x="0"   y="0">dns</text>
+    <text x="70"  y="0" fill="#2f8b6d">·</text>
+    <text x="90"  y="0">http</text>
+    <text x="175" y="0" fill="#2f8b6d">·</text>
+    <text x="195" y="0">tls</text>
+    <text x="250" y="0" fill="#2f8b6d">·</text>
+    <text x="270" y="0">email</text>
+    <text x="370" y="0" fill="#2f8b6d">·</text>
+    <text x="390" y="0">cdn</text>
+    <text x="450" y="0" fill="#2f8b6d">·</text>
+    <text x="470" y="0">findings</text>
+  </g>
+  <!-- prompt -->
+  <g transform="translate(130,530)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24">
+    <text fill="#8a99a8">$</text>
+    <text x="22" fill="#5cd2a3">netrecon</text>
+    <text x="170" fill="#d7e1ea">analyze example.com</text>
+  </g>
+  <text x="1070" y="555" text-anchor="end"
+        font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="18" fill="#2f8b6d">by Yossi Ben Hagai</text>
+</svg>

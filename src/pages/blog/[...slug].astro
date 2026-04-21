@@ -14,8 +14,40 @@ export async function getStaticPaths() {
 type Props = { post: CollectionEntry<'blog'> };
 const { post } = Astro.props as Props;
 const { Content } = await post.render();
+const url = `https://netrecon.pages.dev/blog/${post.slug}/`;
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: post.data.pubDate instanceof Date ? post.data.pubDate.toISOString() : post.data.pubDate,
+  author: {
+    '@type': 'Person',
+    name: post.data.author ?? 'Yossi Ben Hagai',
+    url: 'https://yossibh.github.io/',
+    sameAs: [
+      'https://yossibh.github.io/',
+      'https://github.com/Yossibh',
+      'https://www.linkedin.com/in/yossibenhagai/',
+    ],
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'netrecon',
+    url: 'https://netrecon.pages.dev',
+  },
+  mainEntityOfPage: url,
+  url,
+  keywords: post.data.tags,
+};
 ---
-<Layout title={`${post.data.title} - netrecon`} description={post.data.description}>
+<Layout
+  title={`${post.data.title} - netrecon`}
+  description={post.data.description}
+  ogType="article"
+  canonical={url}
+  schema={articleSchema}
+>
   <article class="post">
     <h1>{post.data.title}</h1>
     <div class="meta">
