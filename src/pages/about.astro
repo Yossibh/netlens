@@ -1,172 +1,128 @@
 ---
 import Layout from '../components/Layout.astro';
 
-const patents = [
-  {
-    title: 'Software-Defined Socket Activation',
-    id: 'US 10,523,584',
-    year: '2019',
-    note: 'Systems-level networking: activate and route sockets dynamically via a software-defined control plane.',
-  },
-  {
-    title: 'Directing data packets by a virtual switch over a unidirectional medium',
-    id: 'WO2018104947A1',
-    year: '2017',
-    note: 'Cross-domain networking over data-diode-class links — packet steering where you can send but never receive.',
-  },
-  {
-    title: 'Position-based communication routing',
-    id: 'US 2018/0063295',
-    year: '2018',
-    note: 'Routing decisions keyed on spatial / positional signals rather than purely topological ones.',
-  },
-  {
-    title: 'System and method for unidirectional communication management',
-    id: 'US 2020/0304600 A1',
-    year: '2020',
-    note: 'Managing a fleet of unidirectional links as first-class network assets — monitoring, policy, recovery.',
-  },
+// High-level career headline only — details live on LinkedIn.
+const careerHighlights = [
+  { label: 'Now', text: 'Senior SRE @ Microsoft — Data & Research Enablement (2022 → present)' },
+  { label: 'Before that', text: '9 years at AT&T — DevOps Team Lead, Innovation Lead, DevOps / integration leadership' },
+  { label: 'Startup', text: 'CTO & co-founder @ VADO Security — unidirectional networks / cross-domain data diode' },
+  { label: 'Earlier', text: 'Head of Engineering at Oasis Communication Technologies · VoIP / backbone / hosting-sec at Internet Gold' },
+  { label: 'Span', text: '25+ years across telco, enterprise, cybersecurity, and cloud — individual contributor through head-of-engineering' },
 ];
 
-const pillars = [
-  {
-    label: 'SRE',
-    headline: 'Production is the product.',
-    bullets: [
-      'Observability-first debugging: traces, metrics, logs as a single surface.',
-      'Error budgets, SLOs, incident response — the boring parts that keep systems honest.',
-      'Runbooks that say "run this exact command", not "investigate further".',
-    ],
-  },
-  {
-    label: 'Software engineering',
-    headline: 'Small, legible systems over clever ones.',
-    bullets: [
-      'TypeScript, Python, Go. Edge runtimes (Cloudflare Workers), Node, containers.',
-      'API-first design; every UI surface is backed by a documented endpoint.',
-      'Tests that catch regressions, not tests that count lines.',
-    ],
-  },
-  {
-    label: 'Security & networking',
-    headline: 'Four patents in cross-domain networking.',
-    bullets: [
-      'Unidirectional / data-diode networks and the protocols that survive on them.',
-      'TLS handshakes read from the wire, not from a library wrapper.',
-      'SSRF, input validation, rate-limiting, least-privilege bindings — treated as load-bearing, not paperwork.',
-    ],
-  },
-  {
-    label: 'Applied AI',
-    headline: 'LLMs as operational tooling, not demos.',
-    bullets: [
-      'MCP (Model Context Protocol) servers exposing real operational tools to agents.',
-      'Grounded retrieval over noisy sources; hand-written prompts beat clever scaffolding.',
-      'Agents as deterministic workflow drivers with a good narrator — not as oracles.',
-    ],
-  },
+const credentials = [
+  { label: 'Certified CISO', note: 'Chief Information Security Officer — See-Security College' },
+  { label: 'DevSecOps Foundations', note: 'SSDLC, policy-as-code mindset' },
+  { label: '4 issued / filed patents', note: 'unidirectional networking + software-defined sockets' },
+  { label: 'Co-founder × 2', note: 'built engineering orgs from zero' },
+];
+
+const patents = [
+  { title: 'Software-Defined Socket Activation', id: 'US 10,523,584', year: '2019' },
+  { title: 'Directing data packets by a virtual switch over a unidirectional medium', id: 'WO2018104947A1', year: '2017' },
+  { title: 'Position-based communication routing', id: 'US 2018/0063295', year: '2018' },
+  { title: 'System and method for unidirectional communication management', id: 'US 2020/0304600 A1', year: '2020' },
 ];
 ---
 
-<Layout title="Yossi Ben Hagai — SRE, software engineer, security & networking, applied AI">
+<Layout title="Yossi Ben Hagai — Senior SRE · Platform · Security & Networking · Applied AI">
   <section class="about-hero">
     <div class="prompt mono">
-      <span class="p-host">yossi@netrecon</span>:<span class="p-path">~/about</span>$ <span class="typed">cat who.md</span>
+      <span class="p-host">yossi@netrecon</span>:<span class="p-path">~/about</span>$ <span class="typed">whoami --summary</span>
     </div>
 
     <h1 class="about-h1">Yossi Ben Hagai</h1>
     <p class="about-lede">
-      I build reliable systems and the tools people use to keep them reliable.
-      My work sits at the intersection of <strong>SRE</strong>, <strong>software engineering</strong>,
-      <strong>security and networking</strong>, and <strong>applied AI</strong> — usually all four
-      in the same week.
+      Senior SRE at Microsoft. Previously DevOps leadership at AT&amp;T, CTO of a cybersecurity
+      startup, head of engineering at telco-scale networking shops. I work at the intersection of
+      <strong>site reliability</strong>, <strong>software engineering</strong>,
+      <strong>security &amp; networking</strong>, and <strong>applied AI</strong> — and I've been
+      shipping at that intersection for 25+ years.
     </p>
-
     <div class="about-pills mono">
-      <span class="pill">sre</span>
-      <span class="pill">software</span>
-      <span class="pill">security</span>
-      <span class="pill">networking</span>
-      <span class="pill">applied-ai</span>
+      <span class="pill">senior sre</span>
+      <span class="pill">platform eng</span>
+      <span class="pill">zero trust</span>
+      <span class="pill">k8s · iac</span>
+      <span class="pill">llmops · rag · mcp</span>
       <span class="pill">4 patents</span>
+      <span class="pill">cciso</span>
     </div>
   </section>
 
   <section class="about-section">
-    <h2 class="about-h2">What I work on</h2>
-    <div class="pillar-grid">
-      {pillars.map((p) => (
-        <article class="pillar-card">
-          <header>
-            <span class="pillar-label mono">{p.label}</span>
-            <h3 class="pillar-headline">{p.headline}</h3>
-          </header>
-          <ul class="pillar-bullets">
-            {p.bullets.map((b) => <li>{b}</li>)}
-          </ul>
-        </article>
+    <h2 class="about-h2">Where I work</h2>
+    <p class="about-muted">
+      Four disciplines, one operator. The most useful work lives on the edges between them —
+      and increasingly, in the middle.
+    </p>
+
+    <div class="quadrant" role="img" aria-label="Quadrant showing the four disciplines and their intersections">
+      <div class="q-card q-sre">
+        <span class="q-tag mono">01 · sre / platform</span>
+        <strong>Keep it up. Make it cheap. Tell the story.</strong>
+        <span class="q-meta mono">SLOs · OpenTelemetry · K8s · GitOps · FinOps · eBPF</span>
+      </div>
+      <div class="q-card q-ai">
+        <span class="q-tag mono">02 · applied AI</span>
+        <strong>LLMs with guardrails, evals, and a job to do.</strong>
+        <span class="q-meta mono">RAG · Agents · MCP · evals · AIOps</span>
+      </div>
+      <div class="q-card q-swe">
+        <span class="q-tag mono">03 · software</span>
+        <strong>Cloud-native, IaC-first, supply-chain-aware.</strong>
+        <span class="q-meta mono">TS · Python · Go · Terraform · containers · SBOM/SLSA</span>
+      </div>
+      <div class="q-card q-sec">
+        <span class="q-tag mono">04 · security &amp; networking</span>
+        <strong>Zero trust. Real handshakes. Hard guarantees.</strong>
+        <span class="q-meta mono">Zero Trust · SASE · PKI · OPA · cross-domain</span>
+      </div>
+
+      <span class="q-edge q-edge-top mono" aria-hidden="true">AIOps · LLMOps</span>
+      <span class="q-edge q-edge-bottom mono" aria-hidden="true">DevSecOps · supply-chain security</span>
+      <span class="q-edge q-edge-left mono" aria-hidden="true">Platform engineering</span>
+      <span class="q-edge q-edge-right mono" aria-hidden="true">AI safety · secure agents</span>
+      <span class="q-center mono" aria-hidden="true">senior&nbsp;work</span>
+    </div>
+  </section>
+
+  <section class="about-section">
+    <h2 class="about-h2">Track record</h2>
+    <p class="about-muted">
+      High-level only. Per-role detail lives on
+      <a href="https://www.linkedin.com/in/yossibenhagai/" target="_blank" rel="noopener">LinkedIn</a>.
+    </p>
+    <ul class="career-list">
+      {careerHighlights.map((c) => (
+        <li>
+          <span class="career-k mono">{c.label}</span>
+          <span class="career-v">{c.text}</span>
+        </li>
+      ))}
+    </ul>
+
+    <div class="cred-grid">
+      {credentials.map((c) => (
+        <div class="cred">
+          <span class="cred-label mono">{c.label}</span>
+          <span class="cred-note">{c.note}</span>
+        </div>
       ))}
     </div>
   </section>
 
   <section class="about-section">
-    <h2 class="about-h2">Selected work</h2>
-
-    <article class="work-item">
-      <div class="work-head">
-        <h3 class="work-title">netrecon</h3>
-        <span class="work-meta mono">correlated network diagnostics · <a href="https://netrecon.pages.dev/">netrecon.pages.dev</a></span>
-      </div>
-      <p>
-        A developer-focused network diagnostics platform that rejects the "dump of raw records" pattern.
-        Users enter a domain, IP, or URL; the app auto-detects input type, runs DNS / HTTP / TLS /
-        email-posture / CDN-inference checks in parallel, and returns <em>correlated findings</em> —
-        raw data, interpreted signals, likely root causes, and reproducible commands.
-      </p>
-      <ul class="work-bullets">
-        <li>Cloudflare Pages + Functions + Workers; zero-cost baseline, scales horizontally by design.</li>
-        <li>Live peer-TLS inspection: hand-crafted TLS 1.2 ClientHello over raw TCP; headless-Chromium fallback for Cloudflare-fronted and TLS 1.3-only targets.</li>
-        <li>MCP server at <a href="/mcp"><code>/api/mcp</code></a> — every module is a tool agents can call.</li>
-        <li>Rate limiting, SSRF guards, input validation implemented in-code (no WAF dependency).</li>
-        <li>Content-aware: <a href="/decode">decoder</a>, <a href="/blog">blog</a>, <a href="/compare">compare</a>, RSS.</li>
-      </ul>
-      <div class="work-links mono">
-        <a href="/">try it</a>
-        <span class="sep">·</span>
-        <a href="/mcp">MCP docs</a>
-        <span class="sep">·</span>
-        <a href="/blog">blog</a>
-      </div>
-    </article>
-
-    <article class="work-item">
-      <div class="work-head">
-        <h3 class="work-title">UC Voice · AT&amp;T Unified Communications Central</h3>
-        <span class="work-meta mono">2013 – 2014 · cloud UC client for smart devices and PCs</span>
-      </div>
-      <p>
-        Contributed to AT&amp;T UC Central — a cloud-based unified-communications client that pulled
-        disparate telephony and UC services behind a single presence-aware interface, extending
-        enterprise voice and messaging across desktops and mobile consistently inside and outside
-        the office.
-      </p>
-    </article>
-  </section>
-
-  <section class="about-section">
     <h2 class="about-h2">Patents</h2>
     <p class="about-muted">
-      Four issued / filed patents. Three of them sit in the unidirectional-networking and
-      cross-domain space — the kind of hard-guarantee networking where you can't just retry.
+      Three on unidirectional / cross-domain networking — the kind of networking where
+      <em>"just retry"</em> is not an option.
     </p>
     <ul class="patent-list">
       {patents.map((p) => (
         <li class="patent">
-          <div class="patent-head">
-            <span class="patent-title">{p.title}</span>
-            <span class="patent-meta mono">{p.id} · {p.year}</span>
-          </div>
-          <p class="patent-note">{p.note}</p>
+          <span class="patent-title">{p.title}</span>
+          <span class="patent-meta mono">{p.id} · {p.year}</span>
         </li>
       ))}
     </ul>
@@ -175,10 +131,14 @@ const pillars = [
   <section class="about-section">
     <h2 class="about-h2">Now</h2>
     <p>
-      Building <a href="/">netrecon</a> as a public-facing portfolio of how I think about
-      correlated diagnostics, edge runtimes, and LLM-tooled operations. Writing about it as I go —
-      see the <a href="/blog">blog</a>. Open to talking about SRE platform work, edge computing,
-      security-first networking, and LLM-driven operator tooling.
+      Senior SRE at Microsoft, working on data &amp; research enablement. On the side,
+      writing and building small things that keep me fluent in modern runtimes, LLM-tooled
+      operations, and edge architectures — most recently <a href="/">netrecon</a>, a
+      correlated-diagnostics tool with an MCP interface.
+    </p>
+    <p>
+      Open to talking about: platform engineering at scale, cross-domain / zero-trust
+      networking, LLM-driven operator tooling, and how senior engineers stay hands-on.
     </p>
   </section>
 
@@ -187,186 +147,128 @@ const pillars = [
     <ul class="contact-list mono">
       <li><span class="c-k">linkedin</span> <a href="https://www.linkedin.com/in/yossibenhagai/" target="_blank" rel="noopener">linkedin.com/in/yossibenhagai</a></li>
       <li><span class="c-k">github</span> <a href="https://github.com/Yossibh" target="_blank" rel="noopener">github.com/Yossibh</a></li>
-      <li><span class="c-k">site</span> <a href="https://netrecon.pages.dev/">netrecon.pages.dev</a></li>
+      <li><span class="c-k">x / twitter</span> <a href="https://twitter.com/YossiBenHagai" target="_blank" rel="noopener">@YossiBenHagai</a></li>
+      <li><span class="c-k">linktree</span> <a href="https://linktr.ee/yossibh" target="_blank" rel="noopener">linktr.ee/yossibh</a></li>
     </ul>
   </section>
 </Layout>
 
 <style>
-  .about-hero {
-    padding: 32px 0 8px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 28px;
-  }
-  .about-hero .prompt {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--fg-dim);
-    margin: 0 0 18px;
-  }
+  .about-hero { padding: 32px 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+  .about-hero .prompt { font-family: var(--mono); font-size: 13px; color: var(--fg-dim); margin: 0 0 18px; }
   .about-hero .prompt .p-host { color: var(--accent); }
   .about-hero .prompt .p-path { color: var(--low); }
   .about-hero .prompt .typed { color: var(--fg); }
-
-  .about-h1 {
-    font-size: 36px;
-    line-height: 1.15;
-    margin: 0 0 12px;
-    letter-spacing: -0.01em;
-  }
-  .about-lede {
-    font-size: 17px;
-    color: var(--fg-dim);
-    max-width: 720px;
-    margin: 0 0 18px;
-  }
+  .about-h1 { font-size: 38px; line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.015em; }
+  .about-lede { font-size: 17px; color: var(--fg-dim); max-width: 760px; margin: 0 0 18px; }
   .about-lede strong { color: var(--fg); font-weight: 600; }
-
-  .about-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin: 0 0 12px;
-  }
+  .about-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
   .about-pills .pill {
-    font-size: 12px;
-    color: var(--fg-dim);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 3px 10px;
-    background: var(--bg-elev);
+    font-size: 11px; color: var(--fg-dim); border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px 10px; background: var(--bg-elev);
   }
 
-  .about-section {
-    padding: 24px 0;
-    border-bottom: 1px dashed var(--border);
-  }
+  .about-section { padding: 28px 0; border-bottom: 1px dashed var(--border); }
   .about-section:last-of-type { border-bottom: 0; }
-
   .about-h2 {
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--accent);
-    font-family: var(--mono);
-    margin: 0 0 18px;
-    font-weight: 600;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.16em;
+    color: var(--accent); font-family: var(--mono); margin: 0 0 14px; font-weight: 600;
   }
   .about-h2::before { content: "# "; color: var(--fg-dim); }
+  .about-muted { color: var(--fg-dim); max-width: 760px; margin-top: 0; }
+  .about-muted em { color: var(--fg); font-style: italic; }
 
-  .about-muted { color: var(--fg-dim); max-width: 720px; }
-
-  .pillar-grid {
+  /* ── Quadrant visualization ──────────────────────────────────────────── */
+  .quadrant {
+    position: relative;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
     gap: 14px;
-  }
-  .pillar-card {
+    margin-top: 20px;
+    padding: 36px 34px;
     border: 1px solid var(--border);
-    background: var(--bg-elev);
-    border-radius: 6px;
+    border-radius: 8px;
+    background:
+      radial-gradient(ellipse at center, rgba(92,210,163,0.08), transparent 60%),
+      var(--bg-elev);
+  }
+  .q-card {
+    display: flex; flex-direction: column; gap: 8px;
     padding: 16px 18px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 130px;
+    transition: border-color .12s ease, transform .12s ease;
   }
-  .pillar-card header { margin-bottom: 10px; }
-  .pillar-label {
-    display: inline-block;
-    font-size: 11px;
-    color: var(--accent);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    padding: 2px 8px;
-    border: 1px solid var(--accent-dim);
-    border-radius: 4px;
-  }
-  .pillar-headline {
-    font-size: 16px;
-    margin: 10px 0 0;
-    font-weight: 600;
-  }
-  .pillar-bullets {
-    margin: 8px 0 0;
-    padding: 0 0 0 1.2em;
-    color: var(--fg-dim);
-    font-size: 14px;
-  }
-  .pillar-bullets li { margin: 4px 0; }
+  .q-card:hover { border-color: var(--accent-dim); transform: translateY(-1px); }
+  .q-tag { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+  .q-card strong { font-size: 15px; color: var(--fg); font-weight: 600; line-height: 1.35; }
+  .q-meta { font-size: 11px; color: var(--fg-dim); margin-top: auto; }
 
-  .work-item {
-    padding: 18px 0;
-    border-top: 1px solid var(--border);
+  .q-edge {
+    position: absolute;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em;
+    color: var(--accent); opacity: 0.78;
+    background: var(--bg-elev);
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    white-space: nowrap;
+    pointer-events: none;
   }
-  .work-item:first-of-type { border-top: 0; padding-top: 0; }
-  .work-head { margin-bottom: 8px; }
-  .work-title {
-    font-size: 20px;
-    margin: 0;
-    font-weight: 600;
-  }
-  .work-meta {
-    display: block;
-    font-size: 12px;
-    color: var(--fg-dim);
-    margin-top: 2px;
-  }
-  .work-bullets {
-    margin: 8px 0 12px;
-    padding: 0 0 0 1.2em;
-    color: var(--fg-dim);
-    font-size: 14px;
-  }
-  .work-bullets li { margin: 4px 0; }
-  .work-links { font-size: 13px; color: var(--fg-dim); }
-  .work-links .sep { margin: 0 6px; color: var(--border); }
+  .q-edge-top    { top: 18px; left: 50%; transform: translateX(-50%); }
+  .q-edge-bottom { bottom: 18px; left: 50%; transform: translateX(-50%); }
+  .q-edge-left   { top: 50%; left: -8px; transform: translateY(-50%) rotate(-90deg); transform-origin: center; }
+  .q-edge-right  { top: 50%; right: -8px; transform: translateY(-50%) rotate(90deg); transform-origin: center; }
 
-  .patent-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .patent {
-    border-left: 2px solid var(--accent-dim);
-    padding: 6px 0 6px 14px;
-  }
-  .patent-head {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: baseline;
-  }
-  .patent-title {
-    font-weight: 600;
-    color: var(--fg);
-  }
-  .patent-meta {
-    font-size: 12px;
-    color: var(--fg-dim);
-  }
-  .patent-note {
-    margin: 4px 0 0;
-    color: var(--fg-dim);
-    font-size: 14px;
+  .q-center {
+    position: absolute;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--bg);
+    background: var(--accent);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-weight: 700;
+    box-shadow: 0 0 0 4px var(--bg-elev), 0 0 0 5px var(--accent-dim);
+    pointer-events: none;
   }
 
-  .contact-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    font-size: 14px;
+  @media (max-width: 720px) {
+    .quadrant { grid-template-columns: 1fr; grid-template-rows: auto; padding: 20px 14px; }
+    .q-edge-left, .q-edge-right { display: none; }
+    .q-edge-top, .q-edge-bottom { position: static; transform: none; display: inline-block; margin: 6px 4px; }
+    .q-center { position: static; transform: none; display: inline-block; margin: 10px 0; }
   }
+
+  /* ── Track record ─────────────────────────────────────────────────────── */
+  .career-list { list-style: none; padding: 0; margin: 10px 0 20px; display: flex; flex-direction: column; gap: 6px; }
+  .career-list li { display: grid; grid-template-columns: 110px 1fr; gap: 14px; align-items: baseline; padding: 4px 0; }
+  .career-k { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .career-v { color: var(--fg); }
+
+  .cred-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 14px; }
+  .cred { display: flex; flex-direction: column; gap: 2px; border-left: 2px solid var(--accent-dim); padding: 4px 0 4px 12px; }
+  .cred-label { font-size: 13px; color: var(--fg); font-weight: 600; }
+  .cred-note { font-size: 12px; color: var(--fg-dim); }
+
+  /* ── Patents ──────────────────────────────────────────────────────────── */
+  .patent-list { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; }
+  .patent { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; border-left: 2px solid var(--accent-dim); padding: 4px 0 4px 12px; }
+  .patent-title { font-weight: 500; color: var(--fg); }
+  .patent-meta { font-size: 12px; color: var(--fg-dim); }
+
+  /* ── Contact ──────────────────────────────────────────────────────────── */
+  .contact-list { list-style: none; padding: 0; margin: 0; font-size: 14px; }
   .contact-list li { padding: 4px 0; }
-  .contact-list .c-k {
-    display: inline-block;
-    min-width: 90px;
-    color: var(--fg-dim);
-  }
+  .contact-list .c-k { display: inline-block; min-width: 100px; color: var(--fg-dim); }
   .contact-list .c-k::after { content: ":"; }
 
   @media (max-width: 640px) {
     .about-h1 { font-size: 28px; }
     .about-lede { font-size: 15px; }
+    .career-list li { grid-template-columns: 1fr; gap: 2px; }
   }
 </style>
-
