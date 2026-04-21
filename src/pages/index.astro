@@ -394,10 +394,22 @@ import Layout from '../components/Layout.astro';
       // TLS
       const tls = report.modules.tls;
       const tlsPanel = h('div', { class: 'panel hidden' });
+      const renderLiveTls = () => {
+        if (!tls?.liveTls || (!tls.liveTls.version && !tls.liveTls.cipher)) return;
+        tlsPanel.appendChild(h('h3', {}, 'Live session (probe)'));
+        tlsPanel.appendChild(kv([
+          ['Version', tls.liveTls.version || '-'],
+          ['Cipher', tls.liveTls.cipher || '-'],
+        ]));
+      };
       if (!tls || tls.skipped || tls.source === 'unavailable') {
         tlsPanel.appendChild(h('div', { class: 'loading' }, tls?.skipReason || 'TLS inspection unavailable.'));
+        renderLiveTls();
       } else if (tls.latestCertificate) {
-        tlsPanel.appendChild(h('div', { class: 'loading' }, 'Source: Certificate Transparency logs (crt.sh). Not a live peer handshake.'));
+        const note = tls.hostSearched && report.input.type === 'ip'
+          ? `Source: Certificate Transparency logs. Searched by PTR hostname "${tls.hostSearched}" since CT indexes by name, not IP.`
+          : 'Source: Certificate Transparency logs (Certspotter / crt.sh). Not a live peer handshake.';
+        tlsPanel.appendChild(h('div', { class: 'loading' }, note));
         tlsPanel.appendChild(kv([
           ['Issuer', tls.latestCertificate.issuer],
           ['Common Name', tls.latestCertificate.commonName || '-'],
@@ -408,8 +420,10 @@ import Layout from '../components/Layout.astro';
         ]));
         tlsPanel.appendChild(h('h3', {}, 'SANs'));
         tlsPanel.appendChild(h('pre', { class: 'cmd' }, tls.latestCertificate.sans.join('\n')));
+        renderLiveTls();
       } else {
-        tlsPanel.appendChild(h('div', { class: 'loading' }, 'No certificates found in CT logs for this domain.'));
+        tlsPanel.appendChild(h('div', { class: 'loading' }, `No certificates found in CT logs for ${tls.hostSearched || 'this host'}.`));
+        renderLiveTls();
       }
       panels['TLS'] = tlsPanel;
       reportEl.appendChild(tlsPanel);

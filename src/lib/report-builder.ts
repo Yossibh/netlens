@@ -70,15 +70,19 @@ export async function buildReport(rawInput: string): Promise<AnalyzeReport> {
           mxPresent: false,
         } satisfies AnalyzeModules['email']),
   ]);
-  const tls = domain
-    ? await inspectTls(domain, { live: http.liveTls })
+  const tlsHost = domain ?? modules.ip?.ptr?.[0];
+  const tlsBase = tlsHost
+    ? await inspectTls(tlsHost, { live: http.liveTls })
     : ({
         ok: true,
         source: 'unavailable',
         skipped: true,
-        skipReason: 'TLS inspection requires a domain (CT logs index by hostname, not IP)',
+        skipReason: http.liveTls?.version
+          ? 'Certificate Transparency logs index by hostname, not IP. Live TLS session metadata from the probe is shown below.'
+          : 'TLS inspection requires a domain (CT logs index by hostname, not IP).',
         liveTls: http.liveTls,
       } satisfies AnalyzeModules['tls']);
+  const tls: AnalyzeModules['tls'] = { ...tlsBase, hostSearched: tlsHost };
   modules.http = http;
   modules.email = email;
   modules.tls = tls;

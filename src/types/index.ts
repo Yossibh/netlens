@@ -122,6 +122,8 @@ export interface TlsModuleResult {
   };
   recentCount?: number;
   liveTls?: { version?: string; cipher?: string };
+  /** The hostname actually searched in CT logs. For IP input this will be the PTR. */
+  hostSearched?: string;
 }
 
 export interface InferenceModuleResult {
