@@ -410,14 +410,14 @@ const shodanRules: Rule[] = [
     if (s.vulns && s.vulns.length) {
       out.push(
         f(
-          'shodan.vulns',
+          'exposure.vulns',
           'high',
-          `Shodan reports ${s.vulns.length} known CVE${s.vulns.length === 1 ? '' : 's'} on this host`,
-          'Shodan correlates banner/version fingerprints against CVE databases. These are heuristics and may include false positives, but each warrants investigation.',
+          `${s.vulns.length} known CVE${s.vulns.length === 1 ? '' : 's'} reported on this host`,
+          'The host\'s exposed banners and versions match entries in public CVE databases. These are heuristics and may include false positives, but each warrants investigation.',
           s.vulns.slice(0, 15),
           ['Validate the reported CVEs against the actual installed versions.', 'Patch or mitigate confirmed vulnerabilities.'],
-          [`shodan host ${s.ip}`, `curl -s 'https://api.shodan.io/shodan/host/${s.ip}?key=$SHODAN_API_KEY' | jq '.vulns'`],
-          'shodan'
+          [],
+          'exposure'
         )
       );
     }
@@ -426,14 +426,14 @@ const shodanRules: Rule[] = [
       if (risky.length) {
         out.push(
           f(
-            'shodan.risky-open-ports',
+            'exposure.risky-open-ports',
             'medium',
             `Potentially sensitive services exposed: ${risky.join(', ')}`,
-            'Shodan observed these administrative/database/remote-access ports open to the public internet. Confirm intent and apply access controls.',
+            'These administrative/database/remote-access ports were observed open to the public internet. Confirm intent and apply access controls.',
             [`Ports seen: ${s.ports.join(', ')}`],
             ['Restrict access via firewall / security group.', 'Put sensitive services behind a VPN or bastion.'],
             [`nmap -p ${risky.join(',')} ${s.ip}`],
-            'shodan'
+            'exposure'
           )
         );
       }

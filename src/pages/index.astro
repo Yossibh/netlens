@@ -139,7 +139,7 @@ import Layout from '../components/Layout.astro';
         { id: 'email',     label: 'email posture',       at: 900 },
         { id: 'tls',       label: 'TLS / CT logs',       at: 1200 },
         { id: 'inference', label: 'CDN / ASN inference', at: 1600 },
-        { id: 'shodan',    label: 'Shodan intel (optional)', at: 1800 },
+        { id: 'shodan',    label: 'public-internet exposure', at: 1800 },
         { id: 'findings',  label: 'correlate findings',  at: 2100 },
       ];
       const panel = document.createElement('div');
@@ -268,10 +268,10 @@ import Layout from '../components/Layout.astro';
       );
       reportEl.appendChild(summary);
 
-      // Tabs (IP/Shodan tabs only when data present)
+      // Tabs (IP/Exposure tabs only when data present)
       const hasIp = !!report.modules.ip;
       const hasShodan = !!report.modules.shodan;
-      const tabs = ['Findings', ...(hasIp ? ['IP'] : []), ...(hasShodan ? ['Shodan'] : []), 'DNS', 'HTTP', 'Email', 'TLS', 'Inference', 'Commands', 'Raw JSON'];
+      const tabs = ['Findings', ...(hasIp ? ['IP'] : []), ...(hasShodan ? ['Exposure'] : []), 'DNS', 'HTTP', 'Email', 'TLS', 'Inference', 'Commands', 'Raw JSON'];
       const tabBar = h('div', { class: 'tabs' });
       const panels = {};
       tabs.forEach((t, i) => {
@@ -327,14 +327,14 @@ import Layout from '../components/Layout.astro';
         reportEl.appendChild(ipPanel);
       }
 
-      // Shodan
+      // Exposure (third-party observed internet posture)
       if (hasShodan) {
         const s = report.modules.shodan;
         const shPanel = h('div', { class: 'panel hidden' });
         if (s.skipped) {
-          shPanel.appendChild(h('div', { class: 'loading' }, s.skipReason || 'Shodan data unavailable.'));
+          shPanel.appendChild(h('div', { class: 'loading' }, s.skipReason || 'Exposure data unavailable.'));
         } else if (s.kind === 'host') {
-          shPanel.appendChild(h('div', { class: 'loading' }, `Shodan intel for ${s.ip} · last seen ${s.lastUpdate || '-'}`));
+          shPanel.appendChild(h('div', { class: 'loading' }, `Public-internet posture for ${s.ip} · last observed ${s.lastUpdate || '-'}`));
           shPanel.appendChild(kv([
             ['Open ports', (s.ports || []).join(', ') || '-'],
             ['Organization', s.org || '-'],
@@ -343,31 +343,50 @@ import Layout from '../components/Layout.astro';
             ['OS', s.os || '-'],
             ['Tags', (s.tags || []).join(', ') || '-'],
             ['Hostnames', (s.hostnames || []).join(', ') || '-'],
-            ['Vulns (CVEs)', (s.vulns || []).join(', ') || '-'],
+            ['Known CVEs', (s.vulns || []).join(', ') || '-'],
           ]));
           if (s.services && s.services.length) {
-            shPanel.appendChild(h('h3', {}, 'Services'));
+            shPanel.appendChild(h('h3', {}, 'Services observed'));
             for (const svc of s.services) {
               const header = `${svc.port}/${svc.transport || 'tcp'} · ${svc.product || 'unknown'}${svc.version ? ' ' + svc.version : ''}`;
               shPanel.appendChild(h('div', { class: 'finding' },
                 h('div', { class: 'title' }, header),
                 svc.cpe.length ? h('div', {}, h('strong', {}, 'CPE'), h('pre', { class: 'cmd' }, svc.cpe.join('\n'))) : null,
-                svc.ssl ? h('div', {}, h('strong', {}, 'SSL (Shodan-observed)'), h('pre', { class: 'cmd' }, `subject: ${svc.ssl.subjectCn || '-'}\nissuer: ${svc.ssl.issuerCn || '-'}\nnotBefore: ${svc.ssl.notBefore || '-'}\nnotAfter: ${svc.ssl.notAfter || '-'}\nversions: ${(svc.ssl.versions || []).join(', ') || '-'}`)) : null,
+                svc.ssl ? h('div', {}, h('strong', {}, 'Observed cert'), h('pre', { class: 'cmd' }, `subject: ${svc.ssl.subjectCn || '-'}\nissuer: ${svc.ssl.issuerCn || '-'}\nnotBefore: ${svc.ssl.notBefore || '-'}\nnotAfter: ${svc.ssl.notAfter || '-'}\nversions: ${(svc.ssl.versions || []).join(', ') || '-'}`)) : null,
               ));
             }
           }
         } else {
-          shPanel.appendChild(h('div', { class: 'loading' }, `Shodan DNS intel for ${s.domain}`));
+          // Domain
+          shPanel.appendChild(h('div', { class: 'loading' }, `Internet-wide posture for ${s.domain}`));
+          const expo = s.exposure;
           shPanel.appendChild(kv([
-            ['Subdomains seen', String((s.subdomains || []).length)],
+            ['Subdomains (passive)', String((s.subdomains || []).length)],
+            ['Hosts mentioning hostname', expo?.hostnameMatches != null ? String(expo.hostnameMatches) : '-'],
+            ['Hosts serving cert for name', expo?.certMatches != null ? String(expo.certMatches) : '-'],
             ['Tags', (s.tags || []).join(', ') || '-'],
           ]));
+
+          const renderFacet = (title, rows) => {
+            if (!rows || !rows.length) return;
+            shPanel.appendChild(h('h3', {}, title));
+            shPanel.appendChild(kv(rows.slice(0, 10).map((r) => [String(r.value), String(r.count)])));
+          };
+          if (expo?.facets) {
+            renderFacet('Top ports (across matching hosts)', expo.facets.port);
+            renderFacet('Top organizations', expo.facets.org);
+            renderFacet('Top products detected', expo.facets.product);
+            renderFacet('Top countries', expo.facets.country);
+            renderFacet('Top CVEs seen on matching hosts', expo.facets.vuln);
+            renderFacet('TLS versions observed', expo.facets.sslVersion);
+          }
+
           if (s.subdomains && s.subdomains.length) {
-            shPanel.appendChild(h('h3', {}, 'Subdomains'));
+            shPanel.appendChild(h('h3', {}, 'Subdomains observed'));
             shPanel.appendChild(h('pre', { class: 'cmd' }, s.subdomains.slice(0, 100).join('\n') + (s.subdomains.length > 100 ? `\n... +${s.subdomains.length - 100} more` : '')));
           }
         }
-        panels['Shodan'] = shPanel;
+        panels['Exposure'] = shPanel;
         reportEl.appendChild(shPanel);
       }
 

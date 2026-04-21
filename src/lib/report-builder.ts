@@ -194,9 +194,14 @@ function buildHighlights(input: NormalizedInput, modules: AnalyzeModules, findin
     if (s.kind === 'host') {
       const ports = s.ports?.length ? `${s.ports.length} ports` : 'no open ports seen';
       const vulns = s.vulns?.length ? `${s.vulns.length} CVEs` : '';
-      out.push(`Shodan: ${ports}${vulns ? ' · ' + vulns : ''}${s.org ? ' · ' + s.org : ''}`);
+      out.push(`Exposure: ${ports}${vulns ? ' · ' + vulns : ''}${s.org ? ' · ' + s.org : ''}`);
     } else {
-      out.push(`Shodan: ${s.subdomains?.length ?? 0} subdomains seen`);
+      const expo = s.exposure;
+      const parts: string[] = [];
+      if (s.subdomains?.length) parts.push(`${s.subdomains.length} subdomains`);
+      if (expo?.hostnameMatches != null) parts.push(`${expo.hostnameMatches} hosts mention hostname`);
+      if (expo?.certMatches != null) parts.push(`${expo.certMatches} hosts serve matching cert`);
+      if (parts.length) out.push(`Exposure: ${parts.join(' · ')}`);
     }
   }
   out.push(`${findingsCount} finding${findingsCount === 1 ? '' : 's'}`);

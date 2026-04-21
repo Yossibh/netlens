@@ -215,6 +215,18 @@ export type ShodanModuleResult =
       subdomains?: string[];
       tags?: string[];
       records?: ShodanDomainRecord[];
+      exposure?: {
+        hostnameMatches?: number;
+        certMatches?: number;
+        facets: {
+          port: Array<{ value: string | number; count: number }>;
+          org: Array<{ value: string | number; count: number }>;
+          product: Array<{ value: string | number; count: number }>;
+          country: Array<{ value: string | number; count: number }>;
+          vuln: Array<{ value: string | number; count: number }>;
+          sslVersion: Array<{ value: string | number; count: number }>;
+        };
+      };
     };
 
 export interface AnalyzeModules {
