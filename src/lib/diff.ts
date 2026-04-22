@@ -24,7 +24,7 @@ export interface DiffResult {
   changes: DiffChange[];
 }
 
-const SCALAR_KEY_FIELDS = ['name', 'from'];
+const SCALAR_KEY_FIELDS = ['name', 'from', 'path'];
 
 function isObject(v: unknown): v is Record<string, JsonValue> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);

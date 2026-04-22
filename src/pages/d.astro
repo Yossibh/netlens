@@ -1,0 +1,80 @@
+---
+import Layout from '../components/Layout.astro';
+
+// /d?t=<targetId>&a=<snapA>&b=<snapB> — public permalink for a specific diff.
+// Uses query params rather than path segments because static Astro builds
+// don't know target/snapshot ids at build time.
+---
+<Layout title="Diff · netrecon" description="Public diff permalink — two snapshots compared.">
+  <section class="decode-hero">
+    <p class="breadcrumb"><a href="/watch">&larr; Watch</a></p>
+    <div class="prompt mono">$ netrecon d</div>
+    <h1 class="hero-title"><span class="accent">Diff</span> between two snapshots</h1>
+    <p id="meta" class="hero-sub mono small">Loading…</p>
+  </section>
+
+  <section class="decode-panel">
+    <div id="diffView"></div>
+    <p class="mono small" id="historyLink"></p>
+  </section>
+</Layout>
+
+<style>
+  .diff-change { border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; margin: 4px 0; font-family: var(--mono); font-size: 12px; }
+  .diff-change.added { border-left: 3px solid #5cd2a3; }
+  .diff-change.removed { border-left: 3px solid #ff7878; }
+  .diff-change.changed { border-left: 3px solid #ffaa3c; }
+  .diff-change .path { color: var(--fg-dim); font-size: 11px; }
+  .diff-change .val { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; margin-top: 2px; }
+  .diff-change .val.before { color: #ff7878; }
+  .diff-change .val.after { color: #5cd2a3; }
+  .empty { color: var(--fg-dim); font-style: italic; font-size: 12px; font-family: var(--mono); }
+</style>
+
+<script is:inline>
+(function() {
+  var q = new URLSearchParams(location.search);
+  var targetId = q.get('t');
+  var a = q.get('a');
+  var b = q.get('b');
+  var meta = document.getElementById('meta');
+  var view = document.getElementById('diffView');
+  var historyLink = document.getElementById('historyLink');
+
+  if (!targetId || !a || !b) {
+    meta.textContent = 'Missing ?t=, ?a= or ?b= parameters.';
+    return;
+  }
+  historyLink.innerHTML = '<a href="/t?id=' + encodeURIComponent(targetId) + '">&rarr; all snapshots for this target</a>';
+
+  fetch('/api/targets/' + encodeURIComponent(targetId) + '/diff?a=' + encodeURIComponent(a) + '&b=' + encodeURIComponent(b), { credentials: 'omit' })
+    .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
+    .then(function(res) {
+      if (!res.ok) { meta.textContent = res.j && res.j.error || 'error'; return; }
+      var d = res.j;
+      meta.textContent = d.target.input + ' · A: ' + new Date(d.a.capturedAt).toLocaleString() + ' → B: ' + new Date(d.b.capturedAt).toLocaleString() + ' · ' + d.changes.length + ' change(s)';
+      if (d.equal) {
+        var p = document.createElement('p'); p.className = 'empty'; p.textContent = 'Identical.';
+        view.appendChild(p);
+        return;
+      }
+      d.changes.forEach(function(c) {
+        var box = document.createElement('div'); box.className = 'diff-change ' + c.kind;
+        var h = document.createElement('div'); h.className = 'path'; h.textContent = c.kind + ' · ' + c.path;
+        box.appendChild(h);
+        if (c.kind === 'added' || c.kind === 'changed') {
+          var after = document.createElement('div'); after.className = 'val after';
+          after.textContent = JSON.stringify(c.after, null, 2);
+          box.appendChild(after);
+        }
+        if (c.kind === 'removed' || c.kind === 'changed') {
+          var before = document.createElement('div'); before.className = 'val before';
+          before.textContent = JSON.stringify(c.before, null, 2);
+          box.appendChild(before);
+        }
+        view.appendChild(box);
+      });
+    })
+    .catch(function(e) { meta.textContent = e.message; });
+})();
+</script>

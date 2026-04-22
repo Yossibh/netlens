@@ -1,0 +1,49 @@
+name: Scheduled snapshot
+
+on:
+  # Every 6 hours. GH Actions cron granularity is 5 min but they warn that
+  # high-load hours can delay jobs, which is fine for us — we're change-
+  # detecting, not timing-critical.
+  schedule:
+    - cron: '7 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    name: Hit /api/cron/snapshot-due
+    runs-on: ubuntu-latest
+    if: github.repository == 'Yossibh/netrecon'
+    steps:
+      - name: Trigger snapshot refresh
+        env:
+          NETRECON_CRON_SECRET: ${{ secrets.NETRECON_CRON_SECRET }}
+        run: |
+          if [ -z "${NETRECON_CRON_SECRET}" ]; then
+            echo "NETRECON_CRON_SECRET not set; skipping." >&2
+            exit 0
+          fi
+          # Retry up to 3x with backoff in case a cold edge takes a moment.
+          ok=0
+          for attempt in 1 2 3; do
+            echo "--- attempt ${attempt} ---"
+            http=$(curl -sS -o /tmp/resp.json -w '%{http_code}' \
+              -X POST \
+              -H "x-netrecon-cron: ${NETRECON_CRON_SECRET}" \
+              -H 'content-type: application/json' \
+              https://netrecon.pages.dev/api/cron/snapshot-due || echo 000)
+            echo "status=${http}"
+            cat /tmp/resp.json || true
+            echo
+            if [ "${http}" = "200" ]; then
+              ok=1
+              break
+            fi
+            sleep $((attempt * 10))
+          done
+          if [ "${ok}" != "1" ]; then
+            echo "Snapshot cron call failed after retries." >&2
+            exit 1
+          fi

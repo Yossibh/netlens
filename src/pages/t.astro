@@ -1,0 +1,165 @@
+---
+import Layout from '../components/Layout.astro';
+
+// /t?id=<targetId> — public target history permalink. Uses a query param
+// (not a dynamic path segment) because static Astro builds don't know the
+// full set of target ids ahead of time, and we don't run an SSR adapter.
+// `/watch` links to `/t?id=...` when the user clicks "share" on a target.
+---
+<Layout title="Target history · netrecon" description="Public snapshot history for a netrecon target.">
+  <section class="decode-hero">
+    <p class="breadcrumb"><a href="/watch">&larr; Watch</a></p>
+    <div class="prompt mono">$ netrecon t</div>
+    <h1 class="hero-title"><span class="accent">Target</span> history</h1>
+    <p id="targetSubtitle" class="hero-sub mono small">Loading…</p>
+  </section>
+
+  <section class="decode-panel">
+    <h2 class="mono">Snapshots</h2>
+    <p class="mono small">Public link — anyone with the URL can see this. Owner actions (new snapshot, delete) are only on <a href="/watch">/watch</a>.</p>
+    <div id="history" class="history"></div>
+    <p id="historyStatus" class="mono small"></p>
+    <button id="diffBtn" disabled>diff selected (pick 2)</button>
+  </section>
+
+  <section class="decode-panel" id="diffSection" style="display:none">
+    <h2 class="mono">Diff</h2>
+    <p class="mono small" id="diffMeta"></p>
+    <div id="diffView"></div>
+    <p class="mono small"><a id="diffPerma" href="#">permalink to this diff</a></p>
+  </section>
+</Layout>
+
+<style>
+  .history { display: grid; gap: 4px; margin: 8px 0; }
+  .h-row { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; }
+  .h-row.sel { background: rgba(92, 210, 163, 0.08); border-color: #5cd2a3; }
+  .pill { padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+  .pill.ok { background: rgba(92, 210, 163, 0.15); color: #5cd2a3; }
+  .pill.err { background: rgba(255, 120, 120, 0.15); color: #ff7878; }
+  .diff-change { border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; margin: 4px 0; font-family: var(--mono); font-size: 12px; }
+  .diff-change.added { border-left: 3px solid #5cd2a3; }
+  .diff-change.removed { border-left: 3px solid #ff7878; }
+  .diff-change.changed { border-left: 3px solid #ffaa3c; }
+  .diff-change .path { color: var(--fg-dim); font-size: 11px; }
+  .diff-change .val { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; margin-top: 2px; }
+  .diff-change .val.before { color: #ff7878; }
+  .diff-change .val.after { color: #5cd2a3; }
+  .empty { color: var(--fg-dim); font-style: italic; font-size: 12px; font-family: var(--mono); }
+</style>
+
+<script is:inline>
+(function() {
+  var targetId = (new URLSearchParams(location.search)).get('id');
+  if (!targetId) {
+    document.getElementById('targetSubtitle').textContent = 'Missing ?id= parameter.';
+    return;
+  }
+  var state = { snapshots: [], picked: [] };
+  function qs(id) { return document.getElementById(id); }
+
+  async function api(path) {
+    var res = await fetch(path, { credentials: 'omit' });
+    var text = await res.text();
+    var data; try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { error: text }; }
+    if (!res.ok) throw new Error(data && data.error ? data.error : 'HTTP ' + res.status);
+    return data;
+  }
+
+  function renderHistory() {
+    var holder = qs('history');
+    holder.innerHTML = '';
+    if (state.snapshots.length === 0) {
+      var p = document.createElement('p'); p.className = 'empty';
+      p.textContent = 'No snapshots yet.';
+      holder.appendChild(p);
+      return;
+    }
+    state.snapshots.forEach(function(s) {
+      var row = document.createElement('label'); row.className = 'h-row';
+      var cb = document.createElement('input'); cb.type = 'checkbox';
+      cb.checked = state.picked.indexOf(s.id) !== -1;
+      cb.onchange = function() {
+        if (cb.checked) {
+          state.picked.push(s.id);
+          if (state.picked.length > 2) state.picked.shift();
+        } else {
+          state.picked = state.picked.filter(function(id) { return id !== s.id; });
+        }
+        qs('diffBtn').disabled = state.picked.length !== 2;
+        renderHistory();
+      };
+      row.appendChild(cb);
+      var pill = document.createElement('span'); pill.className = 'pill ' + (s.ok ? 'ok' : 'err');
+      pill.textContent = s.ok ? (s.status || 'ok') : 'err';
+      row.appendChild(pill);
+      var time = document.createElement('span'); time.textContent = new Date(s.capturedAt).toLocaleString();
+      row.appendChild(time);
+      var idS = document.createElement('span'); idS.style.color = 'var(--fg-dim)'; idS.textContent = s.id;
+      row.appendChild(idS);
+      if (state.picked.indexOf(s.id) !== -1) row.classList.add('sel');
+      holder.appendChild(row);
+    });
+  }
+
+  function renderDiff(diff) {
+    qs('diffSection').style.display = '';
+    qs('diffMeta').textContent = diff.changes.length + ' change(s). A: ' + diff.a.id + ' → B: ' + diff.b.id;
+    var perma = '/d?t=' + encodeURIComponent(targetId) + '&a=' + encodeURIComponent(diff.a.id) + '&b=' + encodeURIComponent(diff.b.id);
+    qs('diffPerma').href = perma;
+    qs('diffPerma').textContent = location.origin + perma;
+    var view = qs('diffView');
+    view.innerHTML = '';
+    if (diff.equal) {
+      var p = document.createElement('p'); p.className = 'empty'; p.textContent = 'Identical.';
+      view.appendChild(p);
+      return;
+    }
+    diff.changes.forEach(function(c) {
+      var box = document.createElement('div'); box.className = 'diff-change ' + c.kind;
+      var h = document.createElement('div'); h.className = 'path'; h.textContent = c.kind + ' · ' + c.path;
+      box.appendChild(h);
+      if (c.kind === 'added' || c.kind === 'changed') {
+        var after = document.createElement('div'); after.className = 'val after';
+        after.textContent = JSON.stringify(c.after, null, 2);
+        box.appendChild(after);
+      }
+      if (c.kind === 'removed' || c.kind === 'changed') {
+        var before = document.createElement('div'); before.className = 'val before';
+        before.textContent = JSON.stringify(c.before, null, 2);
+        box.appendChild(before);
+      }
+      view.appendChild(box);
+    });
+  }
+
+  qs('diffBtn').onclick = async function() {
+    if (state.picked.length !== 2) return;
+    var pair = state.snapshots
+      .filter(function(s) { return state.picked.indexOf(s.id) !== -1; })
+      .sort(function(x, y) { return x.capturedAt.localeCompare(y.capturedAt); });
+    qs('historyStatus').textContent = 'Diffing…';
+    try {
+      var r = await api('/api/targets/' + encodeURIComponent(targetId) + '/diff?a=' + encodeURIComponent(pair[0].id) + '&b=' + encodeURIComponent(pair[1].id));
+      renderDiff(r);
+      qs('historyStatus').textContent = '';
+    } catch (e) {
+      qs('historyStatus').textContent = e.message;
+    }
+  };
+
+  async function load() {
+    try {
+      var t = await api('/api/targets/' + encodeURIComponent(targetId));
+      qs('targetSubtitle').textContent = t.target.input + ' · added ' + new Date(t.target.createdAt).toLocaleString();
+      var s = await api('/api/targets/' + encodeURIComponent(targetId) + '/snapshot');
+      state.snapshots = s.snapshots || [];
+      renderHistory();
+      qs('historyStatus').textContent = state.snapshots.length + ' snapshot(s).';
+    } catch (e) {
+      qs('targetSubtitle').textContent = e.message;
+    }
+  }
+  load();
+})();
+</script>

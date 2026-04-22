@@ -11,6 +11,7 @@
 //  - Diff-friendly: no free-form text where structured data will do.
 
 import { validateFetchUrl } from './security';
+import { probeExposure, type ExposureMatrix } from './exposure';
 
 const MAX_REDIRECTS = 8;
 const FETCH_TIMEOUT_MS = 8000;
@@ -55,6 +56,9 @@ export interface Snapshot {
     sitemapXml: { present: boolean; urlCount: number; firstUrls: string[] };
     securityTxt: { present: boolean; size: number; hash?: string };
   };
+  // Tier D2 — endpoint-exposure matrix. Null when the initial fetch failed
+  // (no origin to probe).
+  exposure: ExposureMatrix | null;
 }
 
 // The only headers we persist in a snapshot. Response headers are wildly
@@ -380,6 +384,7 @@ export async function captureSignals(input: string): Promise<Snapshot> {
       sitemapXml: { present: false, urlCount: 0, firstUrls: [] },
       securityTxt: { present: false, size: 0 },
     },
+    exposure: null,
   });
 
   let startUrl: URL;
@@ -454,10 +459,11 @@ export async function captureSignals(input: string): Promise<Snapshot> {
   }
 
   const origin = new URL(finalUrl).origin;
-  const [robots, sitemap, sectxt] = await Promise.all([
+  const [robots, sitemap, sectxt, exposure] = await Promise.all([
     fetchWellKnown(origin, '/robots.txt'),
     fetchWellKnown(origin, '/sitemap.xml', 256 * 1024),
     fetchWellKnown(origin, '/.well-known/security.txt'),
+    probeExposure(finalUrl),
   ]);
 
   const robotsTxt: Snapshot['wellKnown']['robotsTxt'] = { present: robots.present, size: robots.size };
@@ -485,5 +491,6 @@ export async function captureSignals(input: string): Promise<Snapshot> {
     setCookie,
     html,
     wellKnown: { robotsTxt, sitemapXml, securityTxt },
+    exposure,
   };
 }

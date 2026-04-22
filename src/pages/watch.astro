@@ -51,6 +51,8 @@ import Layout from '../components/Layout.astro';
   .t-card .meta { color: var(--fg-dim); font-family: var(--mono); font-size: 11px; }
   .t-card .actions { display: flex; gap: 6px; }
   .t-card button { font-size: 12px; padding: 4px 10px; }
+  .t-card .btn-link { font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; text-decoration: none; color: inherit; font-family: var(--mono); }
+  .t-card .btn-link:hover { background: rgba(92, 210, 163, 0.08); }
   .history { display: grid; gap: 4px; margin: 8px 0; }
   .h-row { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; background: transparent; }
   .h-row.sel { background: rgba(92, 210, 163, 0.08); border-color: #5cd2a3; }
@@ -142,6 +144,11 @@ import Layout from '../components/Layout.astro';
       var actions = document.createElement('div'); actions.className = 'actions';
       var viewBtn = document.createElement('button'); viewBtn.textContent = 'history';
       viewBtn.onclick = function() { selectTarget(t); };
+      var shareBtn = document.createElement('a'); shareBtn.textContent = 'share';
+      shareBtn.href = '/t?id=' + encodeURIComponent(t.id);
+      shareBtn.className = 'btn-link';
+      shareBtn.target = '_blank';
+      shareBtn.rel = 'noopener';
       var delBtn = document.createElement('button'); delBtn.textContent = 'delete';
       delBtn.onclick = async function() {
         if (!confirm('Delete target ' + t.input + '? Existing snapshots will stop appearing in your list.')) return;
@@ -150,7 +157,7 @@ import Layout from '../components/Layout.astro';
           await refreshTargets();
         } catch (e) { alert(e.message); }
       };
-      actions.appendChild(viewBtn); actions.appendChild(delBtn);
+      actions.appendChild(viewBtn); actions.appendChild(shareBtn); actions.appendChild(delBtn);
 
       card.appendChild(left); card.appendChild(actions);
       holder.appendChild(card);
@@ -311,6 +318,18 @@ import Layout from '../components/Layout.astro';
         ? 'Click to ask the AI for a narrative explanation of ' + r.changes.length + ' change(s).'
         : 'No changes — AI will confirm with canned response.';
       qs('narrationView').innerHTML = '';
+      // Inject a permalink under the diff meta line.
+      var permaUrl = '/d?t=' + encodeURIComponent(state.selected.id) + '&a=' + encodeURIComponent(pair[0].id) + '&b=' + encodeURIComponent(pair[1].id);
+      var metaEl = qs('diffMeta');
+      if (metaEl && !metaEl.querySelector('.perma-link')) {
+        var permaSpan = document.createElement('span');
+        permaSpan.className = 'perma-link';
+        permaSpan.innerHTML = ' · <a href="' + permaUrl + '" target="_blank" rel="noopener">permalink</a>';
+        metaEl.appendChild(permaSpan);
+      } else if (metaEl) {
+        var existing = metaEl.querySelector('.perma-link a');
+        if (existing) existing.href = permaUrl;
+      }
       say(qs('historyStatus'), '', '');
     } catch (e) {
       say(qs('historyStatus'), e.message, 'err');

@@ -7,7 +7,12 @@
 // project. A future /auth/github flow can upgrade an anon uid to a real owner.
 //
 // KV keys:
-//   target:<uid>:<targetId>           -> TargetRecord (point read for list+detail via prefix)
+//   target:<uid>:<targetId>           -> TargetRecord (per-owner, canonical)
+//   target-pub:<targetId>             -> <uid>         (public index; enables
+//                                                      permalinks and cron
+//                                                      iteration over all
+//                                                      targets without knowing
+//                                                      the owner)
 //   target-input:<uid>:<hash(input)>  -> <targetId>   (dedupe: one target per owner per input)
 //   snapshot:<targetId>:<reversed-ts> -> Snapshot    (reversed-ts so list() returns newest first)
 
@@ -36,15 +41,15 @@ export interface KvBinding {
 }
 
 const TARGET_PREFIX = 'target:';
+const TARGET_PUB_PREFIX = 'target-pub:';
 const INPUT_PREFIX = 'target-input:';
 const SNAPSHOT_PREFIX = 'snapshot:';
 const MAX_SNAPSHOTS_PER_LIST = 50;
 const MAX_TARGETS_PER_UID = 25;
-// ~2^63-1 in base-10 width. Reversing a millisecond-precision timestamp lets KV
-// list() return newest-first without extra index metadata.
 const REV_TS_BASE = 9_999_999_999_999;
 
 function targetKey(uid: string, id: string): string { return `${TARGET_PREFIX}${uid}:${id}`; }
+function targetPubKey(id: string): string { return `${TARGET_PUB_PREFIX}${id}`; }
 function inputKey(uid: string, inputHash: string): string { return `${INPUT_PREFIX}${uid}:${inputHash}`; }
 function snapshotKey(targetId: string, reversedTs: string): string { return `${SNAPSHOT_PREFIX}${targetId}:${reversedTs}`; }
 
@@ -91,7 +96,35 @@ export async function createTarget(kv: KvBinding, uid: string, input: string, no
   };
   await kv.put(targetKey(uid, id), JSON.stringify(record));
   await kv.put(inputKey(uid, inputHash), id);
+  await kv.put(targetPubKey(id), uid);
   return record;
+}
+
+// Read a target via the public index (i.e. without knowing the owner uid).
+// Used by the cron job and by public permalink pages. The returned record
+// still has ownerUid populated so callers can enforce write-paths.
+export async function getTargetPublic(kv: KvBinding, id: string): Promise<TargetRecord | null> {
+  const uid = (await kv.get(targetPubKey(id), { type: 'text' })) as string | null;
+  if (!uid) return null;
+  return getTarget(kv, uid, id);
+}
+
+// Iterate every registered target id. Used by the scheduled snapshot job.
+// Paginates under the hood; caller passes a cap so we don't blow subrequest
+// budgets on a massive registry.
+export async function listAllTargetIds(
+  kv: KvBinding,
+  limit = 200,
+): Promise<string[]> {
+  const out: string[] = [];
+  let cursor: string | undefined;
+  while (out.length < limit) {
+    const page = await kv.list({ prefix: TARGET_PUB_PREFIX, limit: Math.min(1000, limit - out.length), cursor });
+    for (const k of page.keys) out.push(k.name.slice(TARGET_PUB_PREFIX.length));
+    if (page.list_complete || !page.cursor) break;
+    cursor = page.cursor;
+  }
+  return out;
 }
 
 export async function listTargets(kv: KvBinding, uid: string): Promise<TargetRecord[]> {
@@ -117,6 +150,7 @@ export async function deleteTarget(kv: KvBinding, uid: string, id: string): Prom
   await Promise.all([
     kv.delete(targetKey(uid, id)),
     kv.delete(inputKey(uid, inputHash)),
+    kv.delete(targetPubKey(id)),
   ]);
   // Snapshots are orphaned by design — they may still be referenced by /d/<id>
   // permalinks. They TTL via the snapshot-level TTL or via a future janitor.
