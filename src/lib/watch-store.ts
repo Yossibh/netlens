@@ -47,6 +47,11 @@ const SNAPSHOT_PREFIX = 'snapshot:';
 const MAX_SNAPSHOTS_PER_LIST = 50;
 const MAX_TARGETS_PER_UID = 25;
 const REV_TS_BASE = 9_999_999_999_999;
+// Default retention for snapshot bodies: 90 days. KV `expirationTtl` drops the
+// value at the end of the window with no janitor required. Headers listed via
+// `listSnapshotHeaders` will naturally shrink as bodies age out (the list
+// walker skips nulls).
+export const DEFAULT_SNAPSHOT_TTL_SECONDS = 60 * 60 * 24 * 90;
 
 function targetKey(uid: string, id: string): string { return `${TARGET_PREFIX}${uid}:${id}`; }
 function targetPubKey(id: string): string { return `${TARGET_PUB_PREFIX}${id}`; }
@@ -147,13 +152,32 @@ export async function deleteTarget(kv: KvBinding, uid: string, id: string): Prom
   const existing = await getTarget(kv, uid, id);
   if (!existing) return false;
   const inputHash = await hashInput(existing.input);
+
+  // Cascade: drop every snapshot body for this target so we don't leak orphans
+  // in KV. Snapshots would eventually age out via DEFAULT_SNAPSHOT_TTL_SECONDS,
+  // but explicit deletion keeps storage tight and makes "delete means gone"
+  // honest for users. Budget-wise this costs one list() + one delete() per
+  // snapshot; targets are capped at MAX_SNAPSHOTS_PER_LIST bodies by the UI
+  // anyway, and KV delete is a free operation on the Workers plan.
+  let cursor: string | undefined;
+  // Hard cap to keep one malicious/giant target from blowing our subrequest
+  // budget on delete. 200 is well above anything /watch surfaces today.
+  const HARD_CAP = 200;
+  let deleted = 0;
+  while (deleted < HARD_CAP) {
+    const page = await kv.list({ prefix: `${SNAPSHOT_PREFIX}${id}:`, limit: Math.min(1000, HARD_CAP - deleted), cursor });
+    if (page.keys.length === 0) break;
+    await Promise.all(page.keys.map((k) => kv.delete(k.name)));
+    deleted += page.keys.length;
+    if (page.list_complete || !page.cursor) break;
+    cursor = page.cursor;
+  }
+
   await Promise.all([
     kv.delete(targetKey(uid, id)),
     kv.delete(inputKey(uid, inputHash)),
     kv.delete(targetPubKey(id)),
   ]);
-  // Snapshots are orphaned by design — they may still be referenced by /d/<id>
-  // permalinks. They TTL via the snapshot-level TTL or via a future janitor.
   return true;
 }
 
@@ -169,13 +193,13 @@ export async function putSnapshot(
   kv: KvBinding,
   target: TargetRecord,
   snap: Snapshot,
-  ttlSeconds?: number,
+  ttlSeconds: number | null = DEFAULT_SNAPSHOT_TTL_SECONDS,
 ): Promise<SnapshotHeader> {
   const ts = Date.parse(snap.capturedAt);
   const rev = reverseTs(Number.isFinite(ts) ? ts : Date.now());
   const id = `s_${rev}_${crypto.randomUUID().replace(/-/g, '').slice(0, 6)}`;
   const key = snapshotKey(target.id, id);
-  await kv.put(key, JSON.stringify(snap), ttlSeconds ? { expirationTtl: ttlSeconds } : undefined);
+  await kv.put(key, JSON.stringify(snap), ttlSeconds && ttlSeconds > 0 ? { expirationTtl: ttlSeconds } : undefined);
 
   // Update the target's last-snapshot pointer.
   const updated: TargetRecord = {
