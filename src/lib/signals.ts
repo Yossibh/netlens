@@ -12,6 +12,7 @@
 
 import { validateFetchUrl } from './security';
 import { probeExposure, type ExposureMatrix } from './exposure';
+import { captureBrowserRender, type BrowserRender } from './browser-render';
 
 const MAX_REDIRECTS = 8;
 const FETCH_TIMEOUT_MS = 8000;
@@ -59,6 +60,10 @@ export interface Snapshot {
   // Tier D2 — endpoint-exposure matrix. Null when the initial fetch failed
   // (no origin to probe).
   exposure: ExposureMatrix | null;
+  // Tier D3 — browser-rendered diagnostics. Null when no browser binding was
+  // passed to captureSignals (i.e. this is a raw-only snapshot). Populated
+  // only when the caller opts in because browser rendering is rate-metered.
+  browser: BrowserRender | null;
 }
 
 // The only headers we persist in a snapshot. Response headers are wildly
@@ -358,7 +363,10 @@ function parseSitemap(xml: string): { urlCount: number; firstUrls: string[] } {
   return { urlCount: locs.length, firstUrls: locs.slice(0, 10).sort() };
 }
 
-export async function captureSignals(input: string): Promise<Snapshot> {
+export async function captureSignals(
+  input: string,
+  opts: { browser?: unknown } = {},
+): Promise<Snapshot> {
   const capturedAt = new Date().toISOString();
   const redirectChain: Snapshot['redirectChain'] = [];
   let headers: Record<string, string> = {};
@@ -385,6 +393,7 @@ export async function captureSignals(input: string): Promise<Snapshot> {
       securityTxt: { present: false, size: 0 },
     },
     exposure: null,
+    browser: null,
   });
 
   let startUrl: URL;
@@ -459,11 +468,12 @@ export async function captureSignals(input: string): Promise<Snapshot> {
   }
 
   const origin = new URL(finalUrl).origin;
-  const [robots, sitemap, sectxt, exposure] = await Promise.all([
+  const [robots, sitemap, sectxt, exposure, browser] = await Promise.all([
     fetchWellKnown(origin, '/robots.txt'),
     fetchWellKnown(origin, '/sitemap.xml', 256 * 1024),
     fetchWellKnown(origin, '/.well-known/security.txt'),
     probeExposure(finalUrl),
+    opts.browser ? captureBrowserRender(finalUrl, opts.browser) : Promise.resolve<BrowserRender | null>(null),
   ]);
 
   const robotsTxt: Snapshot['wellKnown']['robotsTxt'] = { present: robots.present, size: robots.size };
@@ -492,5 +502,6 @@ export async function captureSignals(input: string): Promise<Snapshot> {
     html,
     wellKnown: { robotsTxt, sitemapXml, securityTxt },
     exposure,
+    browser,
   };
 }

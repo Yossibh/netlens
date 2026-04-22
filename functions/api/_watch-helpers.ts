@@ -6,6 +6,7 @@ import type { AiBinding } from '../../src/lib/ai-narrator';
 export interface WatchEnv {
   NETRECON_KV?: KvBinding;
   AI?: AiBinding;
+  BROWSER?: unknown;
 }
 
 const CORS = {

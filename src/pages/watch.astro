@@ -29,6 +29,7 @@ import Layout from '../components/Layout.astro';
     <div id="history" class="history"></div>
     <button id="diffBtn" disabled>diff selected</button>
     <button id="snapshotBtn">take snapshot now</button>
+    <button id="snapshotBrowserBtn" title="Also runs headless Chromium for console errors / LCP / real request fan-out. Rate-limited to once per 22h per target.">take snapshot + browser render</button>
     <p id="historyStatus" class="mono small status-msg"></p>
   </section>
 
@@ -288,15 +289,36 @@ import Layout from '../components/Layout.astro';
   qs('snapshotBtn').onclick = async function() {
     if (!state.selected) return;
     qs('snapshotBtn').disabled = true;
+    qs('snapshotBrowserBtn').disabled = true;
     say(qs('historyStatus'), 'Capturing snapshot (may take a few seconds)…');
     try {
       await api('POST', '/api/targets/' + encodeURIComponent(state.selected.id) + '/snapshot');
       await selectTarget(state.selected);
       await refreshTargets();
+      say(qs('historyStatus'), 'Snapshot captured.');
     } catch (e) {
-      say(qs('historyStatus'), e.message, 'err');
+      say(qs('historyStatus'), e.message, true);
     } finally {
       qs('snapshotBtn').disabled = false;
+      qs('snapshotBrowserBtn').disabled = false;
+    }
+  };
+
+  qs('snapshotBrowserBtn').onclick = async function() {
+    if (!state.selected) return;
+    qs('snapshotBtn').disabled = true;
+    qs('snapshotBrowserBtn').disabled = true;
+    say(qs('historyStatus'), 'Capturing + rendering in Chromium (10-20s)…');
+    try {
+      await api('POST', '/api/targets/' + encodeURIComponent(state.selected.id) + '/snapshot?browser=1');
+      await selectTarget(state.selected);
+      await refreshTargets();
+      say(qs('historyStatus'), 'Snapshot + browser render captured.');
+    } catch (e) {
+      say(qs('historyStatus'), e.message, true);
+    } finally {
+      qs('snapshotBtn').disabled = false;
+      qs('snapshotBrowserBtn').disabled = false;
     }
   };
 
