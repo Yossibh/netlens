@@ -3,6 +3,7 @@ import Layout from '../components/Layout.astro';
 ---
 <Layout title="netrecon - MCP inspector" description="Browser-native MCP client. Paste an MCP server URL, enumerate its tools / prompts / resources, and invoke them. Supports Streamable HTTP and legacy SSE.">
   <section class="decode-hero">
+    <p class="breadcrumb"><a href="/tools">&larr; All tools</a></p>
     <div class="prompt mono">$ netrecon mcp-inspect</div>
     <h1>MCP inspector.</h1>
     <p class="tagline">Connect to any remote MCP server from your browser. List tools, prompts, resources. Invoke and inspect raw JSON-RPC.</p>
@@ -385,5 +386,5 @@ import Layout from '../components/Layout.astro';
   .mcp-form input, .mcp-form textarea, .mcp-form select {
     padding: 6px 8px; border: 1px solid var(--border, #333); background: var(--bg-input, #111); color: inherit; border-radius: 3px;
   }
-  .mcp-result { max-height: 400px; overflow: auto; }
+  .mcp-result { max-height: 400px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }
 </style>

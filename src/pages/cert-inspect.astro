@@ -3,6 +3,7 @@ import Layout from '../components/Layout.astro';
 ---
 <Layout title="netrecon - cert inspector" description="Paste a PEM chain or enter a hostname. Get per-certificate SANs, key info, signature algorithm, expiry timeline, and findings.">
   <section class="decode-hero">
+    <p class="breadcrumb"><a href="/tools">&larr; All tools</a></p>
     <div class="prompt mono">$ netrecon cert-inspect</div>
     <h1>X.509 certificate inspector.</h1>
     <p class="tagline">SANs · sigAlg · expiry · weak primitives · hostname coverage · chain parse</p>

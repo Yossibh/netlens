@@ -1,53 +1,123 @@
 ---
 import Layout from '../components/Layout.astro';
 
-const tools = [
-  { href: '/decode', title: 'Decode', tagline: 'JWT / base64 / URL / hex / JSON / UUID / ULID / timestamp - 100% client-side' },
-  { href: '/subnet', title: 'Subnet calculator', tagline: 'IPv4 + IPv6 CIDR math, reverse zones, wildcard masks' },
-  { href: '/mcp-inspect', title: 'MCP inspector', tagline: 'Connect to any MCP server, enumerate tools, invoke with auto-generated forms' },
-  { href: '/mcp-scan', title: 'MCP security scanner', tagline: 'Transport + auth + prompt-injection + supply-chain fingerprints' },
-  { href: '/cert-inspect', title: 'X.509 cert inspector', tagline: 'Paste PEM or enter hostname - SANs, expiry, weak signatures' },
-  { href: '/csp-analyze', title: 'CSP analyzer', tagline: 'Per-directive CSP findings, nonce/strict-dynamic guidance' },
-  { href: '/mcp', title: 'MCP server', tagline: 'Use netrecon from Claude Desktop, Cursor, VS Code as an MCP tool provider' },
+type Tool = { href: string; title: string; tagline: string; badges?: string[] };
+type Group = { id: string; title: string; blurb: string; tools: Tool[] };
+
+const groups: Group[] = [
+  {
+    id: 'mcp',
+    title: 'MCP tools',
+    blurb: 'Model Context Protocol inspection and security. Because every agent needs a way in - and every server needs a checkup.',
+    tools: [
+      { href: '/mcp-inspect',  title: 'MCP inspector',        tagline: 'Connect to any MCP server, enumerate tools, invoke them with auto-generated forms, watch raw JSON-RPC.', badges: ['new', 'trending'] },
+      { href: '/mcp-scan',     title: 'MCP security scanner', tagline: 'Transport + auth + prompt-injection heuristics + OX-Security 2026 CVE fingerprints + downgrade probe.',    badges: ['new', 'trending'] },
+      { href: '/mcp',          title: 'Hosted MCP server',    tagline: 'Use netrecon from Claude Desktop, Cursor, VS Code as an MCP tool provider.',                              badges: ['trending'] },
+    ],
+  },
+  {
+    id: 'security',
+    title: 'Security',
+    blurb: 'X.509 and web-security posture inspection.',
+    tools: [
+      { href: '/cert-inspect', title: 'X.509 cert inspector', tagline: 'Paste PEM or enter hostname. SANs, expiry, signature algorithm, self-signed and coverage checks.', badges: ['new'] },
+      { href: '/csp-analyze',  title: 'CSP analyzer',         tagline: 'Paste a Content-Security-Policy or fetch from a URL. Per-directive findings, A-F grade.',         badges: ['new'] },
+    ],
+  },
+  {
+    id: 'networking',
+    title: 'Networking',
+    blurb: 'Quick one-shot networking utilities for when you just want the answer.',
+    tools: [
+      { href: '/subnet', title: 'Subnet calculator', tagline: 'IPv4 + IPv6 CIDR math, reverse zones, wildcard masks, split. 100% client-side.' },
+    ],
+  },
+  {
+    id: 'dev',
+    title: 'Developer utilities',
+    blurb: 'Token, text and time decoders that never leave your browser.',
+    tools: [
+      { href: '/decode', title: 'Decode',  tagline: 'JWT / base64 / URL / hex / JSON / UUID / ULID / timestamp. 100% client-side.' },
+    ],
+  },
+  {
+    id: 'platform',
+    title: 'Core platform',
+    blurb: 'The correlated diagnostics engine that started it all.',
+    tools: [
+      { href: '/',        title: 'Analyze',     tagline: 'DNS + HTTP + TLS + email + CDN inference, correlated into findings with reproducible commands.' },
+      { href: '/compare', title: 'Compare',     tagline: 'Side-by-side diff two targets - same domain across envs, two CDNs, before/after migrations.' },
+      { href: '/api/tools', title: 'API + MCP tools', tagline: 'JSON API and MCP tool registry for every module. Use netrecon from an agent or script.' },
+    ],
+  },
 ];
 ---
-<Layout title="netrecon - tools" description="All netrecon utilities: decoder, subnet calc, MCP inspector + scanner, cert inspector, CSP analyzer, and the hosted MCP server.">
+<Layout title="netrecon - tools" description="All netrecon utilities: MCP inspector + scanner, cert inspector, CSP analyzer, subnet calc, decoder, and the correlated-diagnostics platform.">
   <section class="decode-hero">
     <div class="prompt mono">$ netrecon tools</div>
     <h1>Tools.</h1>
     <p class="tagline">The correlated-diagnostics platform, plus focused one-shot utilities.</p>
   </section>
 
-  <section class="tools-grid">
-    {tools.map((t) => (
-      <a class="tool-card" href={t.href}>
-        <h3>{t.title}</h3>
-        <p>{t.tagline}</p>
-      </a>
-    ))}
-  </section>
+  {groups.map((g) => (
+    <section class="tool-group" id={g.id}>
+      <h2>{g.title}</h2>
+      <p class="group-blurb">{g.blurb}</p>
+      <div class="tools-grid">
+        {g.tools.map((t) => (
+          <a class="tool-card" href={t.href}>
+            <div class="tool-card-head">
+              <h3>{t.title}</h3>
+              {t.badges && (
+                <div class="badges">
+                  {t.badges.map((b) => <span class={`chip chip-${b}`}>{b}</span>)}
+                </div>
+              )}
+            </div>
+            <p>{t.tagline}</p>
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
 </Layout>
 
 <style>
+  .tool-group { margin: 28px 0; }
+  .tool-group h2 { margin-bottom: 4px; font-size: 1.15rem; letter-spacing: 0.01em; }
+  .group-blurb { margin: 0 0 12px; color: var(--fg-dim); font-size: 0.9rem; }
   .tools-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-    margin: 24px 0;
+    gap: 14px;
   }
   .tool-card {
     display: block;
-    padding: 16px 18px;
-    border: 1px solid var(--border, #2a2a2a);
-    border-radius: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
     text-decoration: none;
     color: inherit;
-    transition: border-color 120ms, transform 120ms;
+    transition: border-color 120ms, transform 120ms, background 120ms;
   }
   .tool-card:hover {
-    border-color: var(--accent, #5cf);
+    border-color: var(--accent, #5cd2a3);
     transform: translateY(-1px);
+    background: rgba(92, 210, 163, 0.04);
   }
-  .tool-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
-  .tool-card p { margin: 0; font-size: 0.9rem; opacity: 0.78; }
+  .tool-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .tool-card h3 { margin: 0; font-size: 1rem; }
+  .tool-card p { margin: 0; font-size: 0.88rem; opacity: 0.78; }
+  .badges { display: flex; gap: 4px; flex-shrink: 0; }
+  .chip {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    line-height: 1.3;
+  }
+  .chip-new      { background: rgba(92, 210, 163, 0.15); color: #5cd2a3; border: 1px solid rgba(92, 210, 163, 0.35); }
+  .chip-trending { background: rgba(255, 170, 60, 0.12);  color: #ffaa3c; border: 1px solid rgba(255, 170, 60, 0.30); }
 </style>

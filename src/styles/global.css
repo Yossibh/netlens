@@ -326,6 +326,10 @@ pre.cmd {
   padding: 10px 12px;
   border-radius: 4px;
   overflow-x: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
   font-size: 12px;
   margin: 4px 0;
 }
@@ -338,6 +342,10 @@ table.kv th:first-child { width: 30%; }
 table.kv code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 
 .loading { color: var(--fg-dim); font-family: var(--mono); }
+
+.breadcrumb { font-family: var(--mono); font-size: 12px; margin: 0 0 8px; color: var(--fg-dim); }
+.breadcrumb a { color: var(--accent, #5cd2a3); text-decoration: none; }
+.breadcrumb a:hover { text-decoration: underline; }
 .error { color: var(--high); font-family: var(--mono); background: rgba(240, 112, 112, 0.08); padding: 10px; border-radius: 4px; border: 1px solid rgba(240, 112, 112, 0.25); }
 
 .hidden { display: none; }
