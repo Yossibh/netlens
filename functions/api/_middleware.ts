@@ -32,6 +32,8 @@ function policyFor(path: string): Policy | null {
     // POST .../snapshot actually hits the network on our behalf, so rate-limit
     // it a little tighter than the metadata CRUD routes.
     if (path.endsWith('/snapshot')) return { limit: 10, windowSec: 60 };
+    // .../narrate burns AI neurons; cap hard.
+    if (path.endsWith('/narrate')) return { limit: 10, windowSec: 60 };
     return { limit: 60, windowSec: 60 };
   }
   return null;
@@ -62,6 +64,7 @@ function pathFamily(path: string): string {
   if (path.startsWith('/api/whoami'))  return 'whoami';
   if (path.startsWith('/api/targets')) {
     if (path.endsWith('/snapshot')) return 'targets-snap';
+    if (path.endsWith('/narrate')) return 'targets-narrate';
     return 'targets';
   }
   return 'other';

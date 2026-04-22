@@ -17,3 +17,9 @@ binding = "BROWSER"
 [[kv_namespaces]]
 binding = "NETRECON_KV"
 id = "74db0f54ca15417abdbf78716a398fe4"
+
+# Workers AI binding for Phase B — narrated diffs. The model is called from
+# functions/api/targets/[id]/narrate.ts with a strict JSON schema. Free tier
+# gives ~10k neurons/day which is plenty for a passion project.
+[ai]
+binding = "AI"

@@ -35,6 +35,11 @@ import Layout from '../components/Layout.astro';
   <section class="decode-panel" id="diffSection" style="display:none">
     <h2 class="mono">Diff</h2>
     <p class="mono small" id="diffMeta"></p>
+    <div class="narrate-bar">
+      <button id="narrateBtn" disabled>explain with AI</button>
+      <span class="mono small" id="narrateHint">Run a diff first to enable.</span>
+    </div>
+    <div id="narrationView"></div>
     <div id="diffView"></div>
   </section>
 </Layout>
@@ -64,11 +69,28 @@ import Layout from '../components/Layout.astro';
   .diff-change .val.before { color: #ff7878; }
   .diff-change .val.after { color: #5cd2a3; }
   .empty { color: var(--fg-dim); font-family: var(--mono); font-size: 12px; font-style: italic; }
+  .narrate-bar { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; flex-wrap: wrap; }
+  .narration { border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin: 8px 0; }
+  .narration h3 { margin: 0 0 6px 0; font-family: var(--mono); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .narration .sev { padding: 2px 8px; border-radius: 3px; font-size: 10px; text-transform: uppercase; font-family: var(--mono); letter-spacing: 0.05em; }
+  .narration .sev.info { background: rgba(130, 170, 220, 0.15); color: #82aadc; }
+  .narration .sev.notice { background: rgba(92, 210, 163, 0.15); color: #5cd2a3; }
+  .narration .sev.warning { background: rgba(255, 170, 60, 0.18); color: #ffaa3c; }
+  .narration .sev.critical { background: rgba(255, 120, 120, 0.18); color: #ff7878; }
+  .narration .conf { color: var(--fg-dim); font-size: 11px; }
+  .narration .summary { font-size: 14px; margin: 4px 0 10px; }
+  .narration h4 { margin: 8px 0 4px; font-family: var(--mono); font-size: 12px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .narration ul { margin: 0; padding-left: 20px; }
+  .narration li { font-size: 13px; margin: 2px 0; }
+  .narration .citations { margin-top: 8px; border-top: 1px dashed var(--border); padding-top: 8px; }
+  .narration .cit { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); margin: 2px 0; }
+  .narration .cit code { color: #ffaa3c; }
+  .narration .footer { color: var(--fg-dim); font-family: var(--mono); font-size: 10px; margin-top: 8px; }
 </style>
 
 <script is:inline>
 (function() {
-  var state = { targets: [], selected: null, snapshots: [], picked: [] };
+  var state = { targets: [], selected: null, snapshots: [], picked: [], lastPair: null };
 
   function qs(id) { return document.getElementById(id); }
   function mono(v) { var el = document.createElement('span'); el.className = 'mono'; el.textContent = v; return el; }
@@ -283,9 +305,70 @@ import Layout from '../components/Layout.astro';
     try {
       var r = await api('GET', '/api/targets/' + encodeURIComponent(state.selected.id) + '/diff?a=' + encodeURIComponent(pair[0].id) + '&b=' + encodeURIComponent(pair[1].id));
       renderDiff(r);
+      state.lastPair = [pair[0].id, pair[1].id];
+      qs('narrateBtn').disabled = false;
+      qs('narrateHint').textContent = r.changes && r.changes.length
+        ? 'Click to ask the AI for a narrative explanation of ' + r.changes.length + ' change(s).'
+        : 'No changes — AI will confirm with canned response.';
+      qs('narrationView').innerHTML = '';
       say(qs('historyStatus'), '', '');
     } catch (e) {
       say(qs('historyStatus'), e.message, 'err');
+    }
+  };
+
+  function renderNarration(n) {
+    var view = qs('narrationView');
+    view.innerHTML = '';
+    if (!n) return;
+    var box = document.createElement('div'); box.className = 'narration';
+    var h = document.createElement('h3');
+    h.innerHTML = 'AI narrative <span class="sev ' + escapeHtml(n.severity) + '">'
+      + escapeHtml(n.severity) + '</span><span class="conf">confidence: ' + escapeHtml(n.confidence) + '</span>';
+    box.appendChild(h);
+    var sum = document.createElement('p'); sum.className = 'summary'; sum.textContent = n.summary;
+    box.appendChild(sum);
+    if (n.likely_causes && n.likely_causes.length) {
+      var h1 = document.createElement('h4'); h1.textContent = 'Likely causes'; box.appendChild(h1);
+      var u1 = document.createElement('ul');
+      n.likely_causes.forEach(function(c) { var li = document.createElement('li'); li.textContent = c; u1.appendChild(li); });
+      box.appendChild(u1);
+    }
+    if (n.suggested_checks && n.suggested_checks.length) {
+      var h2 = document.createElement('h4'); h2.textContent = 'Suggested checks'; box.appendChild(h2);
+      var u2 = document.createElement('ul');
+      n.suggested_checks.forEach(function(c) { var li = document.createElement('li'); li.textContent = c; u2.appendChild(li); });
+      box.appendChild(u2);
+    }
+    if (n.citations && n.citations.length) {
+      var citBox = document.createElement('div'); citBox.className = 'citations';
+      var ch = document.createElement('h4'); ch.textContent = 'Citations (' + n.citations.length + ')'; citBox.appendChild(ch);
+      n.citations.forEach(function(c) {
+        var row = document.createElement('div'); row.className = 'cit';
+        row.innerHTML = '<code>' + escapeHtml(c.path) + '</code> — ' + escapeHtml(c.why);
+        citBox.appendChild(row);
+      });
+      box.appendChild(citBox);
+    }
+    var foot = document.createElement('div'); foot.className = 'footer';
+    foot.textContent = 'model: ' + (n.model || '?') + ' · v' + (n.version || '?');
+    box.appendChild(foot);
+    view.appendChild(box);
+  }
+
+  qs('narrateBtn').onclick = async function() {
+    if (!state.selected || !state.lastPair) return;
+    qs('narrateBtn').disabled = true;
+    qs('narrateHint').textContent = 'Thinking (Workers AI, may take ~10s)…';
+    try {
+      var r = await api('POST', '/api/targets/' + encodeURIComponent(state.selected.id)
+        + '/narrate?a=' + encodeURIComponent(state.lastPair[0]) + '&b=' + encodeURIComponent(state.lastPair[1]));
+      renderNarration(r.narration);
+      qs('narrateHint').textContent = 'Done.';
+    } catch (e) {
+      qs('narrateHint').textContent = e.message;
+    } finally {
+      qs('narrateBtn').disabled = false;
     }
   };
 

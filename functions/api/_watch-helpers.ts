@@ -1,9 +1,11 @@
 // Shared helpers for the /api/targets/* and /api/diff endpoints.
 
 import type { KvBinding } from '../../src/lib/watch-store';
+import type { AiBinding } from '../../src/lib/ai-narrator';
 
 export interface WatchEnv {
   NETRECON_KV?: KvBinding;
+  AI?: AiBinding;
 }
 
 const CORS = {
