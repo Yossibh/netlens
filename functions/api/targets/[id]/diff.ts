@@ -38,9 +38,16 @@ export const onRequestGet: PagesFunction<WatchEnv> = async ({ request, env, para
   if (!snapA) return withSetCookie(json({ error: `Snapshot ${a} not found` }, 404), setCookieHeader);
   if (!snapB) return withSetCookie(json({ error: `Snapshot ${b} not found` }, 404), setCookieHeader);
 
+  // Strip metadata fields that always differ (timestamps, schema version, input
+  // URL) before diffing so the change list only contains externally-observable
+  // state changes.
+  const stripMeta = (s: typeof snapA): Record<string, unknown> => {
+    const { v: _v, capturedAt: _ts, input: _in, ...rest } = s;
+    return rest as unknown as Record<string, unknown>;
+  };
   const result = diffSnapshots(
-    snapA as unknown as Parameters<typeof diffSnapshots>[0],
-    snapB as unknown as Parameters<typeof diffSnapshots>[1],
+    stripMeta(snapA) as unknown as Parameters<typeof diffSnapshots>[0],
+    stripMeta(snapB) as unknown as Parameters<typeof diffSnapshots>[1],
   );
   return withSetCookie(
     json({
