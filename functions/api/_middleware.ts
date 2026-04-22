@@ -28,6 +28,12 @@ function policyFor(path: string): Policy | null {
   if (path.startsWith('/api/peer-tls')) return { limit: 10, windowSec: 60 };
   if (path.startsWith('/api/mcp'))     return { limit: 20, windowSec: 60 };
   if (path.startsWith('/api/whoami'))  return { limit: 60, windowSec: 60 };
+  if (path.startsWith('/api/targets')) {
+    // POST .../snapshot actually hits the network on our behalf, so rate-limit
+    // it a little tighter than the metadata CRUD routes.
+    if (path.endsWith('/snapshot')) return { limit: 10, windowSec: 60 };
+    return { limit: 60, windowSec: 60 };
+  }
   return null;
 }
 
@@ -54,6 +60,10 @@ function pathFamily(path: string): string {
   if (path.startsWith('/api/compare')) return 'compare';
   if (path.startsWith('/api/mcp'))     return 'mcp';
   if (path.startsWith('/api/whoami'))  return 'whoami';
+  if (path.startsWith('/api/targets')) {
+    if (path.endsWith('/snapshot')) return 'targets-snap';
+    return 'targets';
+  }
   return 'other';
 }
 

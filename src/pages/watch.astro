@@ -1,0 +1,294 @@
+---
+import Layout from '../components/Layout.astro';
+---
+<Layout title="Watch · netrecon" description="Save a target, take snapshots of its externally-observable posture (headers, CSP, cookies, redirect chain, HTML meta, third-party hosts, robots, sitemap), and diff them over time.">
+  <section class="decode-hero">
+    <p class="breadcrumb"><a href="/tools">&larr; All tools</a></p>
+    <div class="prompt mono">$ netrecon watch</div>
+    <h1 class="hero-title"><span class="accent">Watch</span> a target, diff its drift.</h1>
+    <p class="hero-sub">Save a URL. Take snapshots. netrecon records headers, CSP, cookies, redirect chain, HTML meta, third-party hosts, preload hints, robots/sitemap/security.txt. Diff any two snapshots to see what your deploy silently changed.</p>
+  </section>
+
+  <section class="decode-panel">
+    <form id="addForm" autocomplete="off">
+      <label class="mono small" for="inputField">target (URL or domain)</label>
+      <input id="inputField" name="input" placeholder="https://example.com/" required />
+      <input id="noteField" name="note" placeholder="optional note" />
+      <button type="submit" id="addBtn">add target</button>
+    </form>
+    <p id="addStatus" class="mono small status-msg"></p>
+
+    <h2 class="mono">Your targets</h2>
+    <p class="mono small" id="uidLine"></p>
+    <div id="targets" class="targets"></div>
+  </section>
+
+  <section class="decode-panel" id="historySection" style="display:none">
+    <h2 class="mono">History — <span id="historyTargetLabel"></span></h2>
+    <p class="mono small" id="historyHint">Pick two snapshots to diff. Newest first.</p>
+    <div id="history" class="history"></div>
+    <button id="diffBtn" disabled>diff selected</button>
+    <button id="snapshotBtn">take snapshot now</button>
+    <p id="historyStatus" class="mono small status-msg"></p>
+  </section>
+
+  <section class="decode-panel" id="diffSection" style="display:none">
+    <h2 class="mono">Diff</h2>
+    <p class="mono small" id="diffMeta"></p>
+    <div id="diffView"></div>
+  </section>
+</Layout>
+
+<style>
+  .targets { display: grid; gap: 8px; margin-top: 8px; }
+  .t-card { border: 1px solid var(--border); padding: 10px 12px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .t-card .input { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  .t-card .meta { color: var(--fg-dim); font-family: var(--mono); font-size: 11px; }
+  .t-card .actions { display: flex; gap: 6px; }
+  .t-card button { font-size: 12px; padding: 4px 10px; }
+  .history { display: grid; gap: 4px; margin: 8px 0; }
+  .h-row { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; background: transparent; }
+  .h-row.sel { background: rgba(92, 210, 163, 0.08); border-color: #5cd2a3; }
+  .h-row .pill { padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+  .h-row .pill.ok { background: rgba(92, 210, 163, 0.15); color: #5cd2a3; }
+  .h-row .pill.err { background: rgba(255, 120, 120, 0.15); color: #ff7878; }
+  .status-msg { min-height: 1em; }
+  .status-msg.err { color: #ff7878; }
+  .status-msg.ok { color: #5cd2a3; }
+  .diff-change { border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; margin: 4px 0; font-family: var(--mono); font-size: 12px; }
+  .diff-change.added { border-left: 3px solid #5cd2a3; }
+  .diff-change.removed { border-left: 3px solid #ff7878; }
+  .diff-change.changed { border-left: 3px solid #ffaa3c; }
+  .diff-change .path { color: var(--fg-dim); font-size: 11px; }
+  .diff-change .val { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; margin-top: 2px; }
+  .diff-change .val.before { color: #ff7878; }
+  .diff-change .val.after { color: #5cd2a3; }
+  .empty { color: var(--fg-dim); font-family: var(--mono); font-size: 12px; font-style: italic; }
+</style>
+
+<script is:inline>
+(function() {
+  var state = { targets: [], selected: null, snapshots: [], picked: [] };
+
+  function qs(id) { return document.getElementById(id); }
+  function mono(v) { var el = document.createElement('span'); el.className = 'mono'; el.textContent = v; return el; }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[c];
+    });
+  }
+
+  function say(el, msg, cls) {
+    el.textContent = msg || '';
+    el.className = 'mono small status-msg' + (cls ? ' ' + cls : '');
+  }
+
+  async function api(method, path, body) {
+    var opts = { method: method, credentials: 'same-origin', headers: {} };
+    if (body !== undefined) {
+      opts.headers['content-type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    var res = await fetch(path, opts);
+    var text = await res.text();
+    var data;
+    try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { error: text || res.statusText }; }
+    if (!res.ok) throw new Error(data && data.error ? data.error : 'HTTP ' + res.status);
+    return data;
+  }
+
+  function renderTargets() {
+    var holder = qs('targets');
+    holder.innerHTML = '';
+    if (state.targets.length === 0) {
+      var p = document.createElement('p'); p.className = 'empty';
+      p.textContent = 'No targets yet. Add one above.';
+      holder.appendChild(p);
+      return;
+    }
+    state.targets.forEach(function(t) {
+      var card = document.createElement('div'); card.className = 't-card';
+      var left = document.createElement('div');
+      var inp = document.createElement('div'); inp.className = 'input'; inp.textContent = t.input;
+      var meta = document.createElement('div'); meta.className = 'meta';
+      meta.textContent = 'added ' + new Date(t.createdAt).toLocaleString()
+        + (t.lastSnapshotAt ? ' · last snap ' + new Date(t.lastSnapshotAt).toLocaleString() : ' · never snapshotted');
+      left.appendChild(inp); left.appendChild(meta);
+      if (t.note) { var n = document.createElement('div'); n.className = 'meta'; n.textContent = t.note; left.appendChild(n); }
+
+      var actions = document.createElement('div'); actions.className = 'actions';
+      var viewBtn = document.createElement('button'); viewBtn.textContent = 'history';
+      viewBtn.onclick = function() { selectTarget(t); };
+      var delBtn = document.createElement('button'); delBtn.textContent = 'delete';
+      delBtn.onclick = async function() {
+        if (!confirm('Delete target ' + t.input + '? Existing snapshots will stop appearing in your list.')) return;
+        try {
+          await api('DELETE', '/api/targets/' + encodeURIComponent(t.id));
+          await refreshTargets();
+        } catch (e) { alert(e.message); }
+      };
+      actions.appendChild(viewBtn); actions.appendChild(delBtn);
+
+      card.appendChild(left); card.appendChild(actions);
+      holder.appendChild(card);
+    });
+  }
+
+  async function refreshTargets() {
+    try {
+      var r = await api('GET', '/api/targets');
+      state.targets = r.targets || [];
+      qs('uidLine').textContent = 'anon uid: ' + (r.uid || '?');
+      renderTargets();
+    } catch (e) {
+      say(qs('addStatus'), e.message, 'err');
+    }
+  }
+
+  function renderHistory() {
+    var holder = qs('history');
+    holder.innerHTML = '';
+    if (state.snapshots.length === 0) {
+      var p = document.createElement('p'); p.className = 'empty';
+      p.textContent = 'No snapshots yet. Click "take snapshot now" to capture one.';
+      holder.appendChild(p);
+      return;
+    }
+    state.snapshots.forEach(function(s) {
+      var row = document.createElement('label'); row.className = 'h-row';
+      var cb = document.createElement('input'); cb.type = 'checkbox';
+      cb.checked = state.picked.indexOf(s.id) !== -1;
+      cb.onchange = function() {
+        if (cb.checked) {
+          state.picked.push(s.id);
+          if (state.picked.length > 2) {
+            var drop = state.picked.shift();
+            var boxes = holder.querySelectorAll('input[type=checkbox]');
+            boxes.forEach(function(b) { if (b.dataset.snap === drop) b.checked = false; });
+          }
+        } else {
+          state.picked = state.picked.filter(function(id) { return id !== s.id; });
+        }
+        qs('diffBtn').disabled = state.picked.length !== 2;
+        renderHistory();
+      };
+      cb.dataset.snap = s.id;
+      row.appendChild(cb);
+      var pill = document.createElement('span');
+      pill.className = 'pill ' + (s.ok ? 'ok' : 'err');
+      pill.textContent = s.ok ? (s.status || 'ok') : 'err';
+      row.appendChild(pill);
+      var time = document.createElement('span');
+      time.textContent = new Date(s.capturedAt).toLocaleString();
+      row.appendChild(time);
+      var id = document.createElement('span'); id.style.color = 'var(--fg-dim)'; id.textContent = s.id;
+      row.appendChild(id);
+      if (state.picked.indexOf(s.id) !== -1) row.classList.add('sel');
+      holder.appendChild(row);
+    });
+  }
+
+  async function selectTarget(t) {
+    state.selected = t;
+    state.picked = [];
+    qs('historySection').style.display = '';
+    qs('historyTargetLabel').textContent = t.input;
+    qs('diffBtn').disabled = true;
+    qs('diffSection').style.display = 'none';
+    say(qs('historyStatus'), 'Loading…');
+    try {
+      var r = await api('GET', '/api/targets/' + encodeURIComponent(t.id) + '/snapshot');
+      state.snapshots = r.snapshots || [];
+      renderHistory();
+      say(qs('historyStatus'), state.snapshots.length + ' snapshot(s).', 'ok');
+    } catch (e) {
+      say(qs('historyStatus'), e.message, 'err');
+    }
+  }
+
+  function renderDiff(diff) {
+    qs('diffSection').style.display = '';
+    qs('diffMeta').textContent = diff.changes.length + ' change(s). '
+      + 'A: ' + diff.a.id + ' (' + new Date(diff.a.capturedAt).toLocaleString() + ') → '
+      + 'B: ' + diff.b.id + ' (' + new Date(diff.b.capturedAt).toLocaleString() + ')';
+    var view = qs('diffView');
+    view.innerHTML = '';
+    if (diff.equal) {
+      var p = document.createElement('p'); p.className = 'empty'; p.textContent = 'Identical.';
+      view.appendChild(p);
+      return;
+    }
+    diff.changes.forEach(function(c) {
+      var box = document.createElement('div'); box.className = 'diff-change ' + c.kind;
+      var h = document.createElement('div'); h.className = 'path'; h.textContent = c.kind + ' · ' + c.path;
+      box.appendChild(h);
+      if (c.kind === 'added' || c.kind === 'changed') {
+        var after = document.createElement('div'); after.className = 'val after';
+        after.textContent = JSON.stringify(c.after, null, 2);
+        box.appendChild(after);
+      }
+      if (c.kind === 'removed' || c.kind === 'changed') {
+        var before = document.createElement('div'); before.className = 'val before';
+        before.textContent = JSON.stringify(c.before, null, 2);
+        box.appendChild(before);
+      }
+      view.appendChild(box);
+    });
+  }
+
+  qs('addForm').onsubmit = async function(ev) {
+    ev.preventDefault();
+    var input = qs('inputField').value.trim();
+    var note = qs('noteField').value.trim();
+    if (!input) return;
+    qs('addBtn').disabled = true;
+    say(qs('addStatus'), 'Adding…');
+    try {
+      await api('POST', '/api/targets', { input: input, note: note || undefined });
+      qs('inputField').value = ''; qs('noteField').value = '';
+      say(qs('addStatus'), 'Added.', 'ok');
+      await refreshTargets();
+    } catch (e) {
+      say(qs('addStatus'), e.message, 'err');
+    } finally {
+      qs('addBtn').disabled = false;
+    }
+  };
+
+  qs('snapshotBtn').onclick = async function() {
+    if (!state.selected) return;
+    qs('snapshotBtn').disabled = true;
+    say(qs('historyStatus'), 'Capturing snapshot (may take a few seconds)…');
+    try {
+      await api('POST', '/api/targets/' + encodeURIComponent(state.selected.id) + '/snapshot');
+      await selectTarget(state.selected);
+      await refreshTargets();
+    } catch (e) {
+      say(qs('historyStatus'), e.message, 'err');
+    } finally {
+      qs('snapshotBtn').disabled = false;
+    }
+  };
+
+  qs('diffBtn').onclick = async function() {
+    if (state.picked.length !== 2 || !state.selected) return;
+    // Chronological order: older first (a), newer second (b). Snapshots list is
+    // newest-first, so picked[0] (latest click) vs picked[1] needs sorting.
+    var pair = state.snapshots
+      .filter(function(s) { return state.picked.indexOf(s.id) !== -1; })
+      .sort(function(x, y) { return x.capturedAt.localeCompare(y.capturedAt); });
+    if (pair.length !== 2) return;
+    say(qs('historyStatus'), 'Diffing…');
+    try {
+      var r = await api('GET', '/api/targets/' + encodeURIComponent(state.selected.id) + '/diff?a=' + encodeURIComponent(pair[0].id) + '&b=' + encodeURIComponent(pair[1].id));
+      renderDiff(r);
+      say(qs('historyStatus'), '', '');
+    } catch (e) {
+      say(qs('historyStatus'), e.message, 'err');
+    }
+  };
+
+  refreshTargets();
+})();
+</script>

@@ -78,6 +78,7 @@ const isActive = (href: string) => {
       <nav>
         <a href="/" class={isActive('/') ? 'active' : ''}>Analyze</a>
         <a href="/compare" class={isActive('/compare') ? 'active' : ''}>Compare</a>
+        <a href="/watch" class={isActive('/watch') || isActive('/t/') || isActive('/d/') ? 'active' : ''}>Watch</a>
         <a href="/tools" class={isActive('/tools') || isActive('/decode') || isActive('/subnet') || isActive('/mcp-inspect') || isActive('/mcp-scan') || isActive('/cert-inspect') || isActive('/csp-analyze') ? 'active' : ''}>Tools</a>
         <a href="/mcp" class={isActive('/mcp') ? 'active' : ''}>MCP</a>
         <a href="/blog" class={isActive('/blog') ? 'active' : ''}>Blog</a>

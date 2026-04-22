@@ -9,3 +9,11 @@ compatibility_flags = ["nodejs_compat"]
 # through Chrome DevTools Protocol. Free plan: 10 browser-minutes/day.
 [browser]
 binding = "BROWSER"
+
+# KV namespace for change-detection target registry + snapshots (Phase A).
+# Create once with:
+#   npx wrangler kv namespace create NETRECON_KV
+# Then replace the id below with the value printed.
+[[kv_namespaces]]
+binding = "NETRECON_KV"
+id = "74db0f54ca15417abdbf78716a398fe4"
